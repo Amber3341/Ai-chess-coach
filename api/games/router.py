@@ -7,6 +7,7 @@ from api.games.service import (
     InvalidPGNError,
     create_game_from_upload,
     get_game,
+    list_games,
     list_move_evaluations,
 )
 from worker.pipeline.orchestrator import AnalysisError, analyze_game
@@ -26,6 +27,11 @@ async def upload_game(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=str(exc),
         ) from exc
+
+
+@router.get("", response_model=list[GameResponse])
+def read_games(db: Session = Depends(get_db)) -> list[GameResponse]:
+    return list_games(db)
 
 
 @router.get("/{game_id}", response_model=GameResponse)

@@ -71,6 +71,10 @@ export function uploadGame(file: File): Promise<Game> {
   return request<Game>("/api/v1/games", { method: "POST", body: formData });
 }
 
+export function fetchGames(): Promise<Game[]> {
+  return request<Game[]>("/api/v1/games");
+}
+
 export function analyzeGame(gameId: string): Promise<Game> {
   return request<Game>(`/api/v1/games/${gameId}/analyze`, { method: "POST" });
 }

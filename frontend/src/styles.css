@@ -43,6 +43,15 @@ button.secondary {
   color: #20384f;
 }
 
+button.icon-button {
+  background: #ffffff;
+  border: 1px solid #c8d4df;
+  color: #20384f;
+  font-size: 12px;
+  min-height: 34px;
+  padding: 0 10px;
+}
+
 .app-shell {
   margin: 0 auto;
   max-width: 1280px;
@@ -224,6 +233,98 @@ dd {
 code {
   font-family: "JetBrains Mono", "Cascadia Code", Consolas, monospace;
   font-size: 12px;
+}
+
+.history-panel {
+  border-top: 1px solid #e5ebf0;
+  display: grid;
+  gap: 12px;
+  margin-top: 18px;
+  padding-top: 18px;
+}
+
+.history-heading {
+  align-items: center;
+  display: flex;
+  gap: 12px;
+  justify-content: space-between;
+}
+
+.history-heading h2,
+.history-empty {
+  margin-bottom: 0;
+}
+
+.history-search {
+  border: 1px solid #c8d4df;
+  border-radius: 6px;
+  min-height: 38px;
+  padding: 0 10px;
+  width: 100%;
+}
+
+.history-filters {
+  display: grid;
+  gap: 6px;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.history-filters button {
+  background: #ffffff;
+  border: 1px solid #c8d4df;
+  color: #20384f;
+  font-size: 11px;
+  min-height: 32px;
+  padding: 0 6px;
+}
+
+.history-filters button.is-active {
+  background: #20384f;
+  border-color: #20384f;
+  color: #ffffff;
+}
+
+.history-list {
+  display: grid;
+  gap: 8px;
+  max-height: 360px;
+  overflow: auto;
+}
+
+.history-item {
+  background: #ffffff;
+  border: 1px solid #d7e0e8;
+  border-left: 4px solid #7d91a6;
+  border-radius: 6px;
+  color: #18202f;
+  display: grid;
+  gap: 4px;
+  justify-items: start;
+  min-height: 68px;
+  padding: 10px 12px;
+  text-align: left;
+}
+
+.history-item.is-active {
+  background: #eef3f8;
+  border-color: #8ba6bf;
+}
+
+.history-item span {
+  font-weight: 800;
+}
+
+.history-item strong {
+  color: #516070;
+  font-size: 11px;
+  text-transform: uppercase;
+}
+
+.history-item em,
+.history-empty {
+  color: #647588;
+  font-size: 12px;
+  font-style: normal;
 }
 
 .stat-grid {

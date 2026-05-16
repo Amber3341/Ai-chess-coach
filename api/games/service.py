@@ -74,6 +74,15 @@ def get_game(db: Session, game_id: str) -> Game | None:
     return db.get(Game, game_id)
 
 
+def list_games(db: Session, limit: int = 20) -> list[Game]:
+    return (
+        db.query(Game)
+        .order_by(Game.created_at.desc())
+        .limit(limit)
+        .all()
+    )
+
+
 def list_move_evaluations(db: Session, game_id: str) -> list[MoveEvaluation]:
     return (
         db.query(MoveEvaluation)

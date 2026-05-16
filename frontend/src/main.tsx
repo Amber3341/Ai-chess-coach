@@ -1,7 +1,8 @@
-import { StrictMode, useMemo, useState } from "react";
+import { StrictMode, useEffect, useMemo, useState } from "react";
 import { createRoot } from "react-dom/client";
 import {
   analyzeGame,
+  fetchGames,
   fetchMoves,
   fetchReport,
   type Game,
@@ -14,14 +15,26 @@ import { MoveReplayBoard } from "./MoveReplayBoard";
 import "./styles.css";
 
 type WorkflowState = "idle" | "uploading" | "uploaded" | "analyzing" | "complete" | "failed";
+type HistoryFilter = "all" | Game["status"];
+
+const HISTORY_FILTERS: Array<{ label: string; value: HistoryFilter }> = [
+  { label: "All", value: "all" },
+  { label: "Complete", value: "complete" },
+  { label: "Pending", value: "pending" },
+  { label: "Failed", value: "failed" },
+];
 
 function App() {
   const [file, setFile] = useState<File | null>(null);
   const [game, setGame] = useState<Game | null>(null);
   const [report, setReport] = useState<GameReport | null>(null);
   const [moves, setMoves] = useState<MoveEvaluation[]>([]);
+  const [history, setHistory] = useState<Game[]>([]);
   const [state, setState] = useState<WorkflowState>("idle");
   const [error, setError] = useState<string | null>(null);
+  const [historyLoading, setHistoryLoading] = useState(false);
+  const [historyQuery, setHistoryQuery] = useState("");
+  const [historyFilter, setHistoryFilter] = useState<HistoryFilter>("all");
 
   const stats = useMemo(
     () => [
@@ -33,6 +46,41 @@ function App() {
     [game],
   );
 
+  const filteredHistory = useMemo(() => {
+    const query = historyQuery.trim().toLowerCase();
+
+    return history.filter((item) => {
+      const matchesFilter = historyFilter === "all" || item.status === historyFilter;
+      const searchable = [
+        item.white_player,
+        item.black_player,
+        item.result,
+        item.status,
+        item.id,
+      ]
+        .filter(Boolean)
+        .join(" ")
+        .toLowerCase();
+
+      return matchesFilter && (!query || searchable.includes(query));
+    });
+  }, [history, historyFilter, historyQuery]);
+
+  useEffect(() => {
+    void refreshHistory();
+  }, []);
+
+  async function refreshHistory() {
+    setHistoryLoading(true);
+    try {
+      setHistory(await fetchGames());
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not load game history.");
+    } finally {
+      setHistoryLoading(false);
+    }
+  }
+
   async function handleUpload() {
     if (!file) return;
     setError(null);
@@ -43,6 +91,7 @@ function App() {
       const uploaded = await uploadGame(file);
       setGame(uploaded);
       setState("uploaded");
+      await refreshHistory();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Upload failed.");
       setState("failed");
@@ -66,8 +115,34 @@ function App() {
       setReport(nextReport);
       setMoves(nextMoves);
       setState("complete");
+      await refreshHistory();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Analysis failed.");
+      setState("failed");
+    }
+  }
+
+  async function handleSelectGame(nextGame: Game) {
+    setError(null);
+    setGame(nextGame);
+    setReport(null);
+    setMoves([]);
+    setState(nextGame.status === "complete" ? "analyzing" : "uploaded");
+
+    if (nextGame.status !== "complete") {
+      return;
+    }
+
+    try {
+      const [nextReport, nextMoves] = await Promise.all([
+        fetchReport(nextGame.id),
+        fetchMoves(nextGame.id),
+      ]);
+      setReport(nextReport);
+      setMoves(nextMoves);
+      setState("complete");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not load report.");
       setState("failed");
     }
   }
@@ -130,6 +205,60 @@ function App() {
               </div>
             </dl>
           ) : null}
+
+          <section className="history-panel">
+            <div className="history-heading">
+              <h2>Recent Games</h2>
+              <button
+                className="icon-button"
+                disabled={historyLoading}
+                onClick={() => void refreshHistory()}
+                title="Refresh game history"
+              >
+                Refresh
+              </button>
+            </div>
+
+            <input
+              className="history-search"
+              type="search"
+              placeholder="Search players or ID"
+              value={historyQuery}
+              onChange={(event) => setHistoryQuery(event.target.value)}
+            />
+
+            <div className="history-filters" aria-label="History filters">
+              {HISTORY_FILTERS.map((filter) => (
+                <button
+                  className={historyFilter === filter.value ? "is-active" : ""}
+                  key={filter.value}
+                  onClick={() => setHistoryFilter(filter.value)}
+                >
+                  {filter.label}
+                </button>
+              ))}
+            </div>
+
+            {filteredHistory.length > 0 ? (
+              <div className="history-list">
+                {filteredHistory.map((item) => (
+                  <button
+                    className={`history-item ${game?.id === item.id ? "is-active" : ""}`}
+                    key={item.id}
+                    onClick={() => void handleSelectGame(item)}
+                  >
+                    <span>{item.white_player ?? "White"} vs {item.black_player ?? "Black"}</span>
+                    <strong>{item.status}</strong>
+                    <em>{item.result ?? "Unknown"} - {item.moves ?? 0} moves</em>
+                  </button>
+                ))}
+              </div>
+            ) : (
+              <p className="history-empty">
+                {historyLoading ? "Loading games..." : "No matching games."}
+              </p>
+            )}
+          </section>
         </aside>
 
         <section className="report-panel">

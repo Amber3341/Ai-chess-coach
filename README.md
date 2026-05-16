@@ -21,6 +21,7 @@ coaching report, and viewing the result in a React workspace.
   issue counts, report summary, full report JSON, and analysis errors.
 - Local analysis trigger endpoint that moves games through `pending`,
   `processing`, `complete`, and `failed` states.
+- Recent games endpoint for loading uploaded game history.
 - Report and move-list read endpoints for completed games.
 - Automated tests for health checks, valid PGN upload, blank-line PGN handling,
   report readiness, local analysis, move persistence, and evaluator fallback.
@@ -43,6 +44,8 @@ coaching report, and viewing the result in a React workspace.
 - PGN upload workflow with upload/analyze controls and visible workflow status.
 - API client for game upload, local analysis, report fetch, and move fetch.
 - Game metadata panel with player names, result, and game ID.
+- Recent game history in the sidebar with report reloading for completed games.
+- Search and status filters for recent game history.
 - Report dashboard showing blunder, mistake, inaccuracy, and move counts.
 - Coaching report view with summary, critical moments, phase reviews, action
   plan, and full move replay.
@@ -92,6 +95,7 @@ Then open:
 ```text
 GET  /health
 POST /api/v1/games
+GET  /api/v1/games
 GET  /api/v1/games/{game_id}
 POST /api/v1/games/{game_id}/analyze
 GET  /api/v1/games/{game_id}/report
@@ -118,7 +122,7 @@ STOCKFISH_TIME_LIMIT_SECONDS=0.1
 ### Product Features
 
 - User accounts, authentication, and authorization.
-- Game history/dashboard for browsing previously uploaded games.
+- Pagination for larger game histories.
 - Support for multiple games in one PGN file.
 - Richer coaching content, including opening identification, tactical themes,
   endgame labels, and personalized recommendations.

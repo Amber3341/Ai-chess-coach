@@ -73,6 +73,42 @@ def test_upload_valid_pgn(client: TestClient) -> None:
     assert body["moves"] == 6
 
 
+def test_list_games_returns_recent_uploads_first(client: TestClient) -> None:
+    first_pgn = """[Event "First Game"]
+[White "FirstWhite"]
+[Black "FirstBlack"]
+[Result "1-0"]
+
+1. e4 e5 1-0
+"""
+    second_pgn = """[Event "Second Game"]
+[White "SecondWhite"]
+[Black "SecondBlack"]
+[Result "0-1"]
+
+1. d4 d5 0-1
+"""
+
+    first_response = client.post(
+        "/api/v1/games",
+        files={"file": ("first.pgn", first_pgn, "application/x-chess-pgn")},
+    )
+    second_response = client.post(
+        "/api/v1/games",
+        files={"file": ("second.pgn", second_pgn, "application/x-chess-pgn")},
+    )
+
+    response = client.get("/api/v1/games")
+
+    assert response.status_code == 200
+    games = response.json()
+    assert [game["id"] for game in games] == [
+        second_response.json()["id"],
+        first_response.json()["id"],
+    ]
+    assert games[0]["white_player"] == "SecondWhite"
+
+
 def test_run_local_analysis_completes_game_and_records_moves(client: TestClient) -> None:
     pgn = """[Event "Casual Game"]
 [White "Arjun"]
