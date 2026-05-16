@@ -1,0 +1,1 @@
+"""ChessMentor AI backend package."""

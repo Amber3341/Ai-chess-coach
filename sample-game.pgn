@@ -1,0 +1,16 @@
+[Event "Sample ChessMentor Test Game"]
+[Site "Local"]
+[Date "2026.05.16"]
+[Round "1"]
+[White "Arjun"]
+[Black "Player2"]
+[Result "1-0"]
+
+1. e4 e5 2. Nf3 Nc6 3. Bb5 a6 4. Ba4 Nf6 5. O-O Be7
+6. Re1 b5 7. Bb3 d6 8. c3 O-O 9. h3 Nb8 10. d4 Nbd7
+11. c4 c6 12. Nc3 Qc7 13. Be3 Bb7 14. Rc1 Rfe8 15. cxb5 axb5
+16. Nxb5 Qb8 17. Nc3 Bf8 18. Ng5 Re7 19. dxe5 dxe5
+20. Na4 h6 21. Nxf7 Rxf7 22. Bxf7+ Kxf7 23. Qb3+ Kg6
+24. Qe6 Kh7 25. Red1 Rxa4 26. Rxd7 Nxd7 27. Qxd7 Rxe4
+28. Qf5+ g6 29. Qxe4 c5 30. Qc4 Qa8 31. Qf7+ Bg7
+32. Rxc5 Bxg2 33. Rc7 Qg8 34. Qxg8+ Kxg8 35. Kxg2 1-0
