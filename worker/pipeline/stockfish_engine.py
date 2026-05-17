@@ -125,11 +125,15 @@ def evaluate_pgn_with_stockfish(
 
 def evaluate_pgn_auto(pgn_text: str) -> list[MoveEvaluationResult]:
     settings = get_settings()
-    if settings.stockfish_path and settings.stockfish_path.exists():
+    
+    # Use path from settings, or fallback to the Docker default
+    stockfish_path = settings.stockfish_path or Path("/usr/games/stockfish")
+    
+    if stockfish_path.exists():
         try:
             return evaluate_pgn_with_stockfish(
                 pgn_text=pgn_text,
-                stockfish_path=settings.stockfish_path,
+                stockfish_path=stockfish_path,
                 depth=settings.stockfish_depth,
                 time_limit_seconds=settings.stockfish_time_limit_seconds,
             )

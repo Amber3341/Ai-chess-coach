@@ -17,9 +17,14 @@ def run_analysis_background(game_id: str, db_url: str | None = None) -> None:
     """
     settings = get_settings()
     url = db_url or str(settings.database_url)
+    
+    connect_args = {}
+    if url.startswith("sqlite"):
+        connect_args["check_same_thread"] = False
+        
     engine = create_engine(
         url,
-        connect_args={"check_same_thread": False},
+        connect_args=connect_args,
     )
     SessionLocal = sessionmaker(bind=engine)
     db = SessionLocal()

@@ -21,7 +21,8 @@ def analyze_game(db: Session, game_id: str) -> Game:
     db.commit()
 
     try:
-        pgn_text = Path(game.pgn_path).read_text(encoding="utf-8")
+        from api.storage import get_pgn
+        pgn_text = get_pgn(game_id)
         evaluations = evaluate_pgn_auto(pgn_text)
 
         game.move_evaluations.clear()

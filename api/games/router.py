@@ -85,9 +85,15 @@ def run_local_analysis(
     db.commit()
     db.refresh(game)
 
-    # Queue the heavy pipeline (Stockfish + RAG + Gemini) in the background
-    settings = get_settings()
-    background_tasks.add_task(run_analysis_background, game_id, str(settings.database_url))
+    # Attempt to publish to Pub/Sub
+    from api.pubsub import publish_analyze_job
+    published = publish_analyze_job(game_id)
+    
+    if not published:
+        # Queue the heavy pipeline (Stockfish + RAG + Gemini) in the local background thread
+        settings = get_settings()
+        background_tasks.add_task(run_analysis_background, game_id, str(settings.database_url))
+        
     return game
 
 
@@ -123,3 +129,52 @@ def read_move_evaluations(
             detail="Game not found.",
         )
     return list_move_evaluations(db, game_id)
+
+
+import base64
+import json
+import logging
+from pydantic import BaseModel
+from worker.pipeline.orchestrator import analyze_game
+
+logger = logging.getLogger(__name__)
+
+class PubSubMessageData(BaseModel):
+    data: str
+    messageId: str
+
+class PubSubPushRequest(BaseModel):
+    message: PubSubMessageData
+    subscription: str
+
+@router.post("/internal/pubsub/analyze", status_code=status.HTTP_200_OK)
+def handle_pubsub_analyze_push(
+    request: PubSubPushRequest,
+    db: Session = Depends(get_db),
+):
+    """
+    Endpoint for GCP Pub/Sub to push messages to the worker.
+    This runs synchronously in the HTTP request cycle because Cloud Run 
+    scales up to handle it and allows up to 60 minutes for the response.
+    """
+    try:
+        decoded_data = base64.b64decode(request.message.data).decode("utf-8")
+        payload = json.loads(decoded_data)
+        game_id = payload.get("game_id")
+        
+        if not game_id:
+            logger.error("Pub/Sub message missing game_id")
+            return {"status": "error", "message": "missing game_id"}
+            
+        logger.info(f"Received Pub/Sub push for game_id: {game_id}")
+        
+        # Run the heavy analysis pipeline
+        analyze_game(db, game_id)
+        
+        # Return 200 OK so Pub/Sub knows it succeeded and won't retry
+        return {"status": "success", "game_id": game_id}
+        
+    except Exception as e:
+        logger.error(f"Error processing Pub/Sub push: {e}")
+        # Returning a 500 will cause Pub/Sub to retry the message
+        raise HTTPException(status_code=500, detail=str(e))

@@ -47,9 +47,8 @@ async def create_game_from_upload(db: Session, upload: UploadFile, user_id: str)
 
     pgn_text = normalize_pgn_text(pgn_text)
     metadata = parse_pgn(pgn_text)
-    settings = get_settings()
-    settings.upload_dir.mkdir(parents=True, exist_ok=True)
-
+    from api.storage import save_pgn
+    
     game = Game(
         pgn_path="",
         status="pending",
@@ -62,9 +61,9 @@ async def create_game_from_upload(db: Session, upload: UploadFile, user_id: str)
     db.add(game)
     db.flush()
 
-    pgn_path = Path(settings.upload_dir) / f"{game.id}.pgn"
-    pgn_path.write_text(pgn_text, encoding="utf-8")
-    game.pgn_path = str(pgn_path)
+    # Save to GCS or fallback to local
+    pgn_uri = save_pgn(str(game.id), pgn_text)
+    game.pgn_path = pgn_uri
 
     db.commit()
     db.refresh(game)
