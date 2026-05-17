@@ -568,6 +568,14 @@ code {
   padding: 0 8px;
 }
 
+.keyboard-hint {
+  color: #8fa3b8;
+  font-size: 0.72rem;
+  letter-spacing: 0.01em;
+  margin: 0;
+  text-align: center;
+}
+
 .replay-side {
   display: grid;
   gap: 12px;
