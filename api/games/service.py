@@ -35,7 +35,7 @@ def parse_pgn(pgn_text: str) -> dict[str, str | int | None]:
     }
 
 
-async def create_game_from_upload(db: Session, upload: UploadFile) -> Game:
+async def create_game_from_upload(db: Session, upload: UploadFile, user_id: str) -> Game:
     if not upload.filename or not upload.filename.lower().endswith(".pgn"):
         raise InvalidPGNError("Only .pgn files are supported.")
 
@@ -57,6 +57,7 @@ async def create_game_from_upload(db: Session, upload: UploadFile) -> Game:
         moves=metadata["moves"],
         white_player=metadata["white_player"],
         black_player=metadata["black_player"],
+        user_id=user_id,
     )
     db.add(game)
     db.flush()
@@ -70,13 +71,14 @@ async def create_game_from_upload(db: Session, upload: UploadFile) -> Game:
     return game
 
 
-def get_game(db: Session, game_id: str) -> Game | None:
-    return db.get(Game, game_id)
+def get_game(db: Session, game_id: str, user_id: str) -> Game | None:
+    return db.query(Game).filter(Game.id == game_id, Game.user_id == user_id).first()
 
 
-def list_games(db: Session, limit: int = 20) -> list[Game]:
+def list_games(db: Session, user_id: str, limit: int = 20) -> list[Game]:
     return (
         db.query(Game)
+        .filter(Game.user_id == user_id)
         .order_by(Game.created_at.desc())
         .limit(limit)
         .all()

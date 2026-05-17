@@ -3,7 +3,7 @@ from pathlib import Path
 from sqlalchemy.orm import Session
 
 from api.models import Game, MoveEvaluation
-from worker.pipeline.report_builder import build_report
+from worker.pipeline.llm_coach import GeminiCoach
 from worker.pipeline.stockfish_engine import evaluate_pgn_auto
 
 
@@ -30,7 +30,8 @@ def analyze_game(db: Session, game_id: str) -> Game:
         game.inaccuracies = sum(
             1 for item in evaluations if item.classification == "inaccuracy"
         )
-        game.report = build_report(
+        coach = GeminiCoach()
+        game.report = coach.generate_report(
             white_player=game.white_player,
             black_player=game.black_player,
             result=game.result,

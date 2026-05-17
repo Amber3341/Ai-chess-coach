@@ -6,6 +6,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from api.config import get_settings
 from api.database import init_db
 from api.games.router import router as games_router
+from api.auth.router import router as auth_router
+from api.users.router import router as users_router
 
 
 @asynccontextmanager
@@ -32,4 +34,6 @@ def health() -> dict[str, str]:
     return {"status": "ok"}
 
 
+app.include_router(auth_router, prefix=settings.api_prefix)
+app.include_router(users_router, prefix=settings.api_prefix)
 app.include_router(games_router, prefix=settings.api_prefix)

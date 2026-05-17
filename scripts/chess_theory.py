@@ -1,0 +1,75 @@
+"""
+Chess theory corpus for RAG — full combined list.
+Assembled from Part 1 (openings, tactics) and Part 2 (pawn structure, endgames, advanced strategy).
+Total: ~280 passages.
+"""
+from scripts.chess_theory_part1 import CHESS_THEORY_PART1
+from scripts.chess_theory_part2 import CHESS_THEORY_PART2
+
+# Original 61 passages (kept for backward compatibility context)
+_ORIGINAL = [
+    "Develop your pieces in the opening. Knights before bishops is a common guideline. Aim to develop all minor pieces before moving the same piece twice unless there is a concrete tactical reason.",
+    "Control the center in the opening. The squares e4, d4, e5, and d5 are the most important. Pieces placed in or near the center have more mobility and influence than those on the edges.",
+    "Castle early to protect your king. Castling connects your rooks and moves your king to safety behind a pawn shield. In most openings, you should aim to castle within the first 10-12 moves.",
+    "Do not bring your queen out too early. The queen can be attacked by minor pieces, forcing you to retreat and losing tempo. Wait until the position demands queen activity.",
+    "Avoid moving pawns unnecessarily in the opening. Each pawn move creates weaknesses. Move only the central pawns and those needed to develop pieces or gain space.",
+    "Complete your development before launching an attack. Attacking with insufficient forces often leads to a counterattack that punishes your lack of coordination.",
+    "The Ruy Lopez (Spanish Opening) arises after 1.e4 e5 2.Nf3 Nc6 3.Bb5. White pressures the knight defending e5. Black must find active play to equalize.",
+    "The Sicilian Defense (1.e4 c5) is Black's most popular response. It fights for the center asymmetrically, leading to sharp, unbalanced positions where both sides attack on opposite wings.",
+    "The Italian Game (1.e4 e5 2.Nf3 Nc6 3.Bc4) targets the f7 weakness and leads to rich positional battles. The Giuoco Piano variation emphasizes gradual piece development.",
+    "The French Defense (1.e4 e6) is solid but can lead to passive positions. Black must fight for the e5 square and counterattack in the center with ...d5.",
+    "The Caro-Kann Defense (1.e4 c6) prepares ...d5 with solid pawn structure. Black accepts a slightly cramped but sturdy position and aims for a solid endgame.",
+    "The Queen's Gambit (1.d4 d5 2.c4) is not actually a gambit since Black cannot safely keep the pawn. The QGD (2...e6) and QGA (2...dxc4) lead to classical strategic battles.",
+    "The King's Indian Defense (1.d4 Nf6 2.c4 g6) is a hypermodern opening where Black concedes the center early and counterattacks with ...e5 or ...c5.",
+    "The Dutch Defense (1.d4 f5) is an aggressive choice for Black, fighting for e4 immediately. White must be careful about early f3 pawn advances by Black.",
+    "A fork is a tactic where one piece attacks two or more enemy pieces simultaneously. Knights are the most common piece to deliver forks due to their unique movement pattern.",
+    "A pin is a tactic where attacking a piece that shields a more valuable piece behind it. An absolute pin targets the king; a relative pin targets any other piece.",
+    "A skewer is the opposite of a pin. A more valuable piece is attacked and forced to move, exposing a less valuable piece behind it to capture.",
+    "A discovered attack occurs when a piece moves to reveal an attack from the piece behind it. A discovered check is particularly powerful as the opponent is forced to respond to the check.",
+    "Overloading is a tactic where an opponent's piece is given too many defensive duties. By forcing it to deal with one threat, you expose its other defensive responsibilities.",
+    "Deflection is a tactic that forces a defending piece away from its defensive post. Once deflected, the piece can no longer guard its original square or piece.",
+    "Zwischenzug (in-between move) is an intermediate move played instead of the expected recapture. It often involves a check or another forcing move that changes the character of the position.",
+    "A back-rank checkmate occurs when the opponent's king is trapped on the back rank by its own pawns and a rook or queen delivers checkmate. Always ensure your king has an escape square.",
+    "Piece sacrifice for attack: sacrificing a bishop or knight on h7 (the Greek Gift sacrifice) often works when the opponent's king is castled kingside and has not played ...h6.",
+    "Removing the defender (decoy) is a tactic where you capture or deflect a piece that is protecting a key square or piece, allowing your other pieces to land on that square.",
+    "Piece activity is paramount in the middlegame. An active piece on a strong central square is often worth more than a passive piece on the edge, even if material is nominally equal.",
+    "The principle of two weaknesses: if your opponent defends one weakness perfectly, create a second weakness on the other side. The opponent cannot defend both simultaneously.",
+    "A strong outpost is a square deep in the opponent's territory that cannot be attacked by their pawns. A knight on an outpost is extremely powerful.",
+    "Rooks belong on open or semi-open files. Place your rooks on the files that will open in the pawn structure. Doubling rooks on an open file creates powerful pressure.",
+    "The bishop pair is a long-term advantage in open positions. Two bishops can control all the squares on the board and work well together, especially in endgames.",
+    "A bad bishop is one that is blocked by its own pawns on the same color. In such positions, the opponent's knight may be more valuable than the bishop.",
+    "Space advantage restricts the opponent's pieces. When you have more space, keep the position closed and do not trade pieces unless it improves your coordination.",
+    "In positions with opposite-side castling, both sides attack the other's king immediately. Pawn storms (advancing pawns toward the enemy king) are effective in these positions.",
+    "Prophylaxis means preventing the opponent's plan before it happens. Think about what your opponent wants to do and stop it while improving your own position.",
+    "Transformation of advantages: when you have a positional advantage, look for the right moment to convert it into a more concrete advantage (material, king safety, or a passed pawn).",
+    "An isolated pawn (IQP) has no friendly pawns on adjacent files. It is a static weakness that must be blockaded and attacked. The side with the IQP gains dynamic piece activity in compensation.",
+    "A doubled pawn is two pawns on the same file. It is generally a weakness because the rear pawn cannot advance until the front pawn moves. However, doubled pawns can open files for rooks.",
+    "A backward pawn is one that cannot advance because adjacent pawns have gone further and the square in front is controlled by the opponent. It is a chronic weakness.",
+    "A passed pawn has no opposing pawns in front of it on its own file or adjacent files. In the endgame, passed pawns are extremely dangerous and must be advanced or blockaded.",
+    "The pawn majority on one side of the board can create a passed pawn by advancing pawns and trading them off. A queenside majority is very valuable in rook endgames.",
+    "Pawn breaks are pawn advances that challenge and disrupt the opponent's pawn structure. Identifying the key pawn break in a pawn structure is often the key to the position.",
+    "Blockading a passed pawn with a knight is very effective. A knight sitting in front of a passed pawn immobilizes it and is difficult to dislodge.",
+    "In a fixed pawn structure, identify which side is the attacker and which is the defender. The attacker should launch an attack on the side where they have more space.",
+    "King activity is crucial in the endgame. The king transforms from a piece to protect into a powerful fighting piece. Activate your king immediately as queens and rooks are traded off.",
+    "The opposition in king and pawn endgames is when two kings stand two squares apart with one square between them. The player who does NOT have to move has the opposition.",
+    "The Lucena position is a winning rook endgame technique involving 'building a bridge' to shelter your king from checks and allow the passed pawn to promote.",
+    "The Philidor position is a defensive technique in rook endgames. The defending rook uses the 'Philidor draw' method to prevent the attacking king from advancing.",
+    "In rook endgames, the rook belongs behind the passed pawn — your own or the opponent's. The rook gains power by supporting the pawn's advance from behind.",
+    "In opposite-colored bishop endgames, material advantage rarely matters. The defending side can often hold a draw because one bishop cannot attack squares the other can't defend.",
+    "Knight endgames are similar to pawn endgames. Passed pawns are very strong. The knight has to work hard to stop a passed pawn and support its own.",
+    "In queen endgames, the side with the more active queen usually wins. Perpetual check is a common resource for the weaker side. Watch for stalemate tricks.",
+    "The triangulation technique in king and pawn endgames allows one king to lose a tempo, forcing a zugzwang on the opponent when direct opposition cannot be gained.",
+    "Zugzwang is a situation where the player to move has no good moves and any move worsens their position. It is a key weapon in many king and pawn endgames.",
+    "A fianchettoed bishop (on g2 or b2) is a strong defender of the castled king. Trading it away weakens the 'dragon diagonal' and creates long-term king safety problems.",
+    "Pawn advances in front of your castled king (h3, g4) can both strengthen and weaken king safety. h3 prevents piece invasions on g4 but weakens the g3 square.",
+    "Open files toward your king are dangerous. If the f-file, g-file, or h-file opens near your castled king, it becomes a highway for the opponent's rooks.",
+    "After kingside castling, moving the g or h pawn unnecessarily creates weaknesses. The pawn triangle g7-h7-f7 (or mirror) is the most compact and safe king shelter.",
+    "The h2-h3 or a2-a3 prophylactic move is common to prevent opponent piece invasions (Bg4, Bg5 pins). Prophylactic pawn moves preserve king safety and piece activity.",
+    "Activate rooks by placing them on open files, the seventh rank, or behind passed pawns. A rook on the seventh rank attacks pawns and restricts the opponent's king.",
+    "Doubling rooks on an open file creates a battery that is very difficult to counter. The opponent must either exchange one rook or abandon the file.",
+    "The connected rooks (both rooks on the same rank with no pieces between them) are very powerful as they support each other and control the entire rank.",
+    "Rook endings with one extra pawn are often drawn with best play. The defending side should use the Philidor method or active rook checking from behind.",
+]
+
+# Full combined corpus
+CHESS_THEORY = list({p: None for p in (_ORIGINAL + CHESS_THEORY_PART1 + CHESS_THEORY_PART2)}.keys())

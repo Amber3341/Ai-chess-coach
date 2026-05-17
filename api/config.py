@@ -13,6 +13,13 @@ class Settings(BaseSettings):
     stockfish_path: Path | None = None
     stockfish_depth: int = 12
     stockfish_time_limit_seconds: float = 0.1
+    jwt_secret_key: str = "default_secret_for_local_dev_only_change_in_prod"
+    jwt_algorithm: str = "HS256"
+    access_token_expire_minutes: int = 1440
+    gemini_api_key: str | None = None
+    qdrant_url: str | None = None
+    qdrant_api_key: str | None = None
+    qdrant_collection: str = "chess-theory"
 
     model_config = SettingsConfigDict(
         env_file=".env",

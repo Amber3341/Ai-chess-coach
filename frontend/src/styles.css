@@ -700,3 +700,61 @@ code {
     transform: rotate(360deg);
   }
 }
+
+.auth-container {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 100vh;
+  padding: 24px;
+}
+
+.auth-card {
+  background: #ffffff;
+  border: 1px solid #d3dce6;
+  border-radius: 8px;
+  max-width: 400px;
+  padding: 32px;
+  width: 100%;
+}
+
+.auth-card h2 {
+  margin-bottom: 24px;
+  text-align: center;
+}
+
+.form-group {
+  margin-bottom: 16px;
+}
+
+.form-group label {
+  display: block;
+  font-size: 13px;
+  font-weight: 700;
+  margin-bottom: 6px;
+  color: #3f4f61;
+}
+
+.form-group input {
+  width: 100%;
+  padding: 10px;
+  border: 1px solid #c8d4df;
+  border-radius: 6px;
+}
+
+.auth-card button {
+  width: 100%;
+  margin-top: 8px;
+}
+
+.auth-link {
+  text-align: center;
+  margin-top: 24px;
+  font-size: 14px;
+}
+
+.auth-link a {
+  color: #b3263c;
+  font-weight: 600;
+  text-decoration: none;
+}

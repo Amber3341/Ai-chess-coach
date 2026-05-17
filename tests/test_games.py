@@ -14,6 +14,9 @@ from api.main import app
 from worker.pipeline.stockfish_engine import evaluate_pgn_auto
 
 
+from api.models import User
+from api.auth.dependencies import get_current_user
+
 @pytest.fixture
 def client(monkeypatch: pytest.MonkeyPatch) -> Generator[TestClient, None, None]:
     test_dir = Path(".test_runtime") / str(uuid.uuid4())
@@ -32,8 +35,13 @@ def client(monkeypatch: pytest.MonkeyPatch) -> Generator[TestClient, None, None]
         finally:
             db.close()
 
+    def override_get_current_user():
+        return User(id="test-user-id", email="test@example.com", display_name="Test User")
+
     monkeypatch.setattr(get_settings(), "upload_dir", test_dir / "uploads")
+    monkeypatch.setattr(get_settings(), "database_url", f"sqlite:///{test_dir / 'test.db'}")
     app.dependency_overrides[get_db] = override_get_db
+    app.dependency_overrides[get_current_user] = override_get_current_user
     try:
         yield TestClient(app)
     finally:
@@ -128,10 +136,26 @@ def test_run_local_analysis_completes_game_and_records_moves(client: TestClient)
     moves_response = client.get(f"/api/v1/games/{game_id}/moves")
     report_response = client.get(f"/api/v1/games/{game_id}/report")
 
-    assert analysis_response.status_code == 200
+    assert analysis_response.status_code == 202
     analyzed_game = analysis_response.json()
-    assert analyzed_game["status"] == "complete"
-    assert analyzed_game["report_summary"]
+    # Immediately after 202, status is "processing"
+    assert analyzed_game["status"] == "processing"
+
+    # TestClient runs background tasks synchronously before returning,
+    # but we need to poll for completeness to simulate real behavior.
+    # Poll game status (bg task has run by now in TestClient)
+    import time
+    for _ in range(10):
+        game_response = client.get(f"/api/v1/games/{game_id}")
+        if game_response.json()["status"] != "processing":
+            break
+        time.sleep(0.5)
+    
+    final_game = client.get(f"/api/v1/games/{game_id}").json()
+    assert final_game["status"] == "complete", f"Expected complete, got: {final_game['status']} — {final_game.get('error_message')}"
+
+    moves_response = client.get(f"/api/v1/games/{game_id}/moves")
+    report_response = client.get(f"/api/v1/games/{game_id}/report")
 
     assert moves_response.status_code == 200
     move_evaluations = moves_response.json()
@@ -153,6 +177,7 @@ def test_run_local_analysis_completes_game_and_records_moves(client: TestClient)
         "action_plan",
         "metadata",
     }
+
 
 
 def test_report_not_ready_before_analysis(client: TestClient) -> None:

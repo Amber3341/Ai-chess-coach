@@ -5,6 +5,7 @@ import {
   fetchGames,
   fetchMoves,
   fetchReport,
+  pollUntilComplete,
   type Game,
   type GameReport,
   type MoveEvaluation,
@@ -12,7 +13,19 @@ import {
 } from "./api";
 import { CriticalMomentBoard } from "./CriticalMomentBoard";
 import { MoveReplayBoard } from "./MoveReplayBoard";
+import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
+import { AuthProvider, useAuth } from "./AuthContext";
+import { LoginPage, RegisterPage } from "./AuthPages";
 import "./styles.css";
+
+function ProtectedRoute({ children }: { children: React.ReactNode }) {
+  const { user, loading } = useAuth();
+  
+  if (loading) return <div style={{ padding: "2rem", textAlign: "center" }}>Loading user data...</div>;
+  if (!user) return <Navigate to="/login" />;
+  
+  return <>{children}</>;
+}
 
 type WorkflowState = "idle" | "uploading" | "uploaded" | "analyzing" | "complete" | "failed";
 type HistoryFilter = "all" | Game["status"];
@@ -35,6 +48,7 @@ function App() {
   const [historyLoading, setHistoryLoading] = useState(false);
   const [historyQuery, setHistoryQuery] = useState("");
   const [historyFilter, setHistoryFilter] = useState<HistoryFilter>("all");
+  const { user, logout } = useAuth();
 
   const stats = useMemo(
     () => [
@@ -98,25 +112,40 @@ function App() {
     }
   }
 
+  const [analyzeProgress, setAnalyzeProgress] = useState<string | null>(null);
+
   async function handleAnalyze() {
     if (!game) return;
     setError(null);
+    setAnalyzeProgress("Starting analysis...");
     setState("analyzing");
     try {
-      const analyzed = await analyzeGame(game.id);
-      setGame(analyzed);
-      if (analyzed.status === "failed") {
-        throw new Error(analyzed.error_message ?? "Analysis failed.");
+      // Trigger analysis — returns 202 immediately with status="processing"
+      const triggered = await analyzeGame(game.id);
+      setGame(triggered);
+      setAnalyzeProgress("Running Stockfish evaluation + AI coaching (this may take ~30s)...");
+
+      // Poll every 2s until the background job finishes
+      const completed = await pollUntilComplete(
+        game.id,
+        (polled) => setGame(polled),
+      );
+
+      setAnalyzeProgress(null);
+      if (completed.status === "failed") {
+        throw new Error(completed.error_message ?? "Analysis failed.");
       }
+
       const [nextReport, nextMoves] = await Promise.all([
-        fetchReport(analyzed.id),
-        fetchMoves(analyzed.id),
+        fetchReport(completed.id),
+        fetchMoves(completed.id),
       ]);
       setReport(nextReport);
       setMoves(nextMoves);
       setState("complete");
       await refreshHistory();
     } catch (err) {
+      setAnalyzeProgress(null);
       setError(err instanceof Error ? err.message : "Analysis failed.");
       setState("failed");
     }
@@ -154,7 +183,11 @@ function App() {
           <p className="eyebrow">ChessMentor AI</p>
           <h1>Game Analysis Workspace</h1>
         </div>
-        <div className={`status-pill status-${state}`}>{state}</div>
+        <div style={{ display: "flex", gap: "1rem", alignItems: "center" }}>
+          <span>{user?.display_name || user?.email}</span>
+          <button className="secondary" onClick={logout}>Log Out</button>
+          <div className={`status-pill status-${state}`}>{state}</div>
+        </div>
       </header>
 
       <section className="workspace-grid">
@@ -272,7 +305,7 @@ function App() {
           </div>
 
           {state === "analyzing" ? (
-            <AnalysisLoading />
+            <AnalysisLoading message={analyzeProgress} />
           ) : report ? (
             <ReportView report={report} moves={moves} />
           ) : (
@@ -287,13 +320,13 @@ function App() {
   );
 }
 
-function AnalysisLoading() {
+function AnalysisLoading({ message }: { message?: string | null }) {
   return (
     <div className="analysis-loading" role="status" aria-live="polite">
       <div className="spinner" aria-hidden="true" />
       <div>
         <h2>Analyzing game</h2>
-        <p>Running engine evaluation and preparing the coaching report.</p>
+        <p>{message ?? "Running engine evaluation and preparing the coaching report."}</p>
       </div>
     </div>
   );
@@ -361,6 +394,18 @@ function Phase({ title, text }: { title: string; text: string }) {
 
 createRoot(document.getElementById("root")!).render(
   <StrictMode>
-    <App />
-  </StrictMode>,
+    <AuthProvider>
+      <BrowserRouter>
+        <Routes>
+          <Route path="/login" element={<LoginPage />} />
+          <Route path="/register" element={<RegisterPage />} />
+          <Route path="/" element={
+            <ProtectedRoute>
+              <App />
+            </ProtectedRoute>
+          } />
+        </Routes>
+      </BrowserRouter>
+    </AuthProvider>
+  </StrictMode>
 );

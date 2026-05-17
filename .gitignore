@@ -56,3 +56,5 @@ server.out.log
 server.err.log
 frontend/node_modules/
 frontend/dist/
+dev_v2.db
+parsed_docs.txt

@@ -57,9 +57,18 @@ export type GameReport = {
 };
 
 async function request<T>(path: string, options?: RequestInit): Promise<T> {
-  const response = await fetch(`${API_BASE_URL}${path}`, options);
+  const headers = new Headers(options?.headers);
+  const token = localStorage.getItem("token");
+  if (token) {
+    headers.set("Authorization", `Bearer ${token}`);
+  }
+  const response = await fetch(`${API_BASE_URL}${path}`, { ...options, headers });
   if (!response.ok) {
     const body = await response.json().catch(() => null);
+    if (response.status === 401) {
+      localStorage.removeItem("token");
+      window.dispatchEvent(new Event("auth-error"));
+    }
     throw new Error(body?.detail ?? `Request failed with ${response.status}`);
   }
   return response.json() as Promise<T>;
@@ -85,4 +94,62 @@ export function fetchReport(gameId: string): Promise<GameReport> {
 
 export function fetchMoves(gameId: string): Promise<MoveEvaluation[]> {
   return request<MoveEvaluation[]>(`/api/v1/games/${gameId}/moves`);
+}
+
+export function fetchGame(gameId: string): Promise<Game> {
+  return request<Game>(`/api/v1/games/${gameId}`);
+}
+
+/**
+ * Polls GET /games/{id} every `intervalMs` until status is no longer "processing".
+ * Calls `onProgress` on each poll tick.
+ * Rejects after `timeoutMs` (default 5 minutes).
+ */
+export function pollUntilComplete(
+  gameId: string,
+  onProgress: (game: Game) => void,
+  intervalMs = 2000,
+  timeoutMs = 300_000,
+): Promise<Game> {
+  return new Promise((resolve, reject) => {
+    const deadline = Date.now() + timeoutMs;
+    const tick = async () => {
+      try {
+        const game = await fetchGame(gameId);
+        onProgress(game);
+        if (game.status !== "processing") {
+          resolve(game);
+          return;
+        }
+        if (Date.now() > deadline) {
+          reject(new Error("Analysis timed out after 5 minutes."));
+          return;
+        }
+        setTimeout(tick, intervalMs);
+      } catch (err) {
+        reject(err);
+      }
+    };
+    setTimeout(tick, intervalMs);
+  });
+}
+
+export function login(data: any): Promise<{ access_token: string }> {
+  return request<{ access_token: string }>("/api/v1/auth/login", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(data),
+  });
+}
+
+export function register(data: any): Promise<{ access_token: string }> {
+  return request<{ access_token: string }>("/api/v1/auth/register", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(data),
+  });
+}
+
+export function getMe(): Promise<any> {
+  return request<any>("/api/v1/users/me");
 }
