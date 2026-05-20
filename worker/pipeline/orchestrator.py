@@ -1,10 +1,13 @@
 from pathlib import Path
+import logging
 
 from sqlalchemy.orm import Session
 
 from api.models import Game, MoveEvaluation
 from worker.pipeline.llm_coach import GeminiCoach
 from worker.pipeline.stockfish_engine import evaluate_pgn_auto
+
+logger = logging.getLogger(__name__)
 
 
 class AnalysisError(RuntimeError):
@@ -56,12 +59,19 @@ def analyze_game(db: Session, game_id: str) -> Game:
 
         db.commit()
         db.refresh(game)
+        logger.info(
+            "Worker pipeline completed for game_id=%s source=%s source_detail=%s",
+            game_id,
+            game.report.get("metadata", {}).get("source"),
+            game.report.get("metadata", {}).get("source_detail"),
+        )
         return game
     except Exception as exc:
         game.status = "failed"
         game.error_message = str(exc) or repr(exc)
         db.commit()
         db.refresh(game)
+        logger.exception("Worker pipeline failed for game_id=%s: %s", game_id, game.error_message)
         return game
 
 

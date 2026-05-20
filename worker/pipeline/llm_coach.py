@@ -1,5 +1,6 @@
 import json
 import logging
+import time
 from pydantic import BaseModel, Field
 from google import genai
 from google.genai import types
@@ -9,6 +10,17 @@ from worker.pipeline.report_builder import build_report
 from worker.pipeline.rag_retriever import retrieve as rag_retrieve
 
 logger = logging.getLogger(__name__)
+
+GEMINI_MAX_ATTEMPTS = 3
+GEMINI_RETRYABLE_MARKERS = (
+    "503",
+    "500",
+    "UNAVAILABLE",
+    "INTERNAL",
+    "DEADLINE_EXCEEDED",
+    "temporarily",
+    "timeout",
+)
 
 class CoachNote(BaseModel):
     ply: int
@@ -65,45 +77,65 @@ class GeminiCoach:
         # 4. Create prompt with RAG context
         prompt = self._build_prompt(white_player, black_player, result, critical_moments, theory_passages)
 
-        # 4. Call Gemini
-        try:
-            response = self.client.models.generate_content(
-                model='gemini-2.5-flash',
-                contents=prompt,
-                config=types.GenerateContentConfig(
-                    response_mime_type="application/json",
-                    temperature=0.4,
-                ),
-            )
-            
-            # 5. Parse response and merge into base_report
-            llm_data = json.loads(response.text)
-            
-            base_report["summary"] = llm_data.get("summary", base_report["summary"])
-            base_report["opening_review"] = llm_data.get("opening_review", base_report["opening_review"])
-            base_report["middlegame_review"] = llm_data.get("middlegame_review", base_report["middlegame_review"])
-            base_report["endgame_review"] = llm_data.get("endgame_review", base_report["endgame_review"])
-            base_report["action_plan"] = llm_data.get("action_plan", base_report["action_plan"])
-            
-            # Merge coach notes
-            notes_map = {item["ply"]: item["note"] for item in llm_data.get("coach_notes", [])}
-            for moment in base_report["critical_moments"]:
-                if moment["ply"] in notes_map:
-                    moment["coach_note"] = notes_map[moment["ply"]]
-            
-            base_report["metadata"]["source_detail"] = (
-                "Coaching provided by Gemini 2.5 Flash + RAG"
-                if theory_passages
-                else "Coaching provided by Gemini 2.5 Flash"
-            )
-            
-            return base_report
+        last_error: Exception | None = None
+        for attempt in range(1, GEMINI_MAX_ATTEMPTS + 1):
+            try:
+                response = self.client.models.generate_content(
+                    model='gemini-2.5-flash',
+                    contents=prompt,
+                    config=types.GenerateContentConfig(
+                        response_mime_type="application/json",
+                        temperature=0.4,
+                    ),
+                )
+                
+                # 5. Parse response and merge into base_report
+                llm_data = json.loads(response.text)
+                
+                base_report["summary"] = llm_data.get("summary", base_report["summary"])
+                base_report["opening_review"] = llm_data.get("opening_review", base_report["opening_review"])
+                base_report["middlegame_review"] = llm_data.get("middlegame_review", base_report["middlegame_review"])
+                base_report["endgame_review"] = llm_data.get("endgame_review", base_report["endgame_review"])
+                base_report["action_plan"] = llm_data.get("action_plan", base_report["action_plan"])
+                
+                # Merge coach notes
+                notes_map = {item["ply"]: item["note"] for item in llm_data.get("coach_notes", [])}
+                for moment in base_report["critical_moments"]:
+                    if moment["ply"] in notes_map:
+                        moment["coach_note"] = notes_map[moment["ply"]]
+                
+                base_report["metadata"]["source_detail"] = (
+                    "Coaching provided by Gemini 2.5 Flash + RAG"
+                    if theory_passages
+                    else "Coaching provided by Gemini 2.5 Flash"
+                )
+                
+                return base_report
 
-        except Exception as e:
-            # Log error and fallback gracefully
-            logger.error(f"Gemini API Error: {e}")
-            base_report["metadata"]["source_detail"] = f"Gemini LLM skipped (Error: {e})"
-            return base_report
+            except Exception as e:
+                last_error = e
+                if attempt < GEMINI_MAX_ATTEMPTS and _is_retryable_gemini_error(e):
+                    delay_seconds = 2 ** attempt
+                    logger.warning(
+                        "Gemini API attempt %s/%s failed with retryable error; retrying in %ss: %s",
+                        attempt,
+                        GEMINI_MAX_ATTEMPTS,
+                        delay_seconds,
+                        e,
+                    )
+                    time.sleep(delay_seconds)
+                    continue
+
+                logger.warning(
+                    "Gemini LLM skipped after %s attempt(s); using deterministic fallback report: %s",
+                    attempt,
+                    e,
+                )
+                base_report["metadata"]["source_detail"] = f"Gemini LLM skipped after {attempt} attempt(s) (Error: {e})"
+                return base_report
+
+        base_report["metadata"]["source_detail"] = f"Gemini LLM skipped (Error: {last_error})"
+        return base_report
 
     def _build_prompt(self, white, black, result, critical_moments, theory_passages: list[str] | None = None) -> str:
         cm_text = []
@@ -146,3 +178,9 @@ Provide a JSON response strictly matching this schema:
 }}
 
 Ensure the advice is encouraging, specific to the actual moves played, and actionable. Do not wrap the JSON in Markdown backticks (```). Return raw JSON only."""
+
+
+def _is_retryable_gemini_error(exc: Exception) -> bool:
+    message = str(exc)
+    upper_message = message.upper()
+    return any(marker in upper_message or marker in message for marker in GEMINI_RETRYABLE_MARKERS)

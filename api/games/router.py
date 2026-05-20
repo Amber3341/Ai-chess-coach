@@ -94,12 +94,16 @@ def run_local_analysis(
 
     # Attempt to publish to Pub/Sub
     from api.pubsub import publish_analyze_job
+    logger.info("Attempting Pub/Sub publish for game_id=%s", game_id)
     published = publish_analyze_job(game_id)
     
     if not published:
         # Queue the heavy pipeline (Stockfish + RAG + Gemini) in the local background thread
         settings = get_settings()
+        logger.warning("Pub/Sub publish unavailable; using local background task for game_id=%s", game_id)
         background_tasks.add_task(run_analysis_background, game_id, str(settings.database_url))
+    else:
+        logger.info("Pub/Sub publish accepted for game_id=%s", game_id)
         
     return game
 
@@ -165,10 +169,25 @@ def handle_pubsub_analyze_push(
             logger.error("Pub/Sub message missing game_id")
             return {"status": "error", "message": "missing game_id"}
             
-        logger.info(f"Received Pub/Sub push for game_id: {game_id}")
+        logger.info("Received Pub/Sub push for game_id=%s message_id=%s", game_id, request.message.messageId)
         
         # Run the heavy analysis pipeline
-        analyze_game(db, game_id)
+        analyzed_game = analyze_game(db, game_id)
+
+        if analyzed_game.status == "failed":
+            logger.error(
+                "Pub/Sub analysis marked game failed for game_id=%s message_id=%s error=%s",
+                game_id,
+                request.message.messageId,
+                analyzed_game.error_message,
+            )
+            return {
+                "status": "failed",
+                "game_id": game_id,
+                "message": analyzed_game.error_message,
+            }
+
+        logger.info("Completed Pub/Sub analysis for game_id=%s message_id=%s", game_id, request.message.messageId)
         
         # Return 200 OK so Pub/Sub knows it succeeded and won't retry
         return {"status": "success", "game_id": game_id}

@@ -37,12 +37,18 @@ def publish_analyze_job(game_id: str) -> bool:
         message_bytes = message_json.encode("utf-8")
         
         try:
+            logger.info("Publishing analysis job for game_id=%s to topic=%s", game_id, topic_path)
             future = publisher.publish(topic_path, data=message_bytes)
             message_id = future.result()
-            logger.info(f"Published analysis job for game {game_id} to Pub/Sub (msg id: {message_id})")
+            logger.info("Published analysis job for game_id=%s to Pub/Sub message_id=%s", game_id, message_id)
             return True
         except Exception as e:
-            logger.error(f"Failed to publish to Pub/Sub: {e}")
+            logger.error("Failed to publish game_id=%s to Pub/Sub: %s", game_id, e)
             return False
             
+    logger.warning(
+        "Pub/Sub is not configured; project_id=%s topic_id=%s",
+        settings.gcp_project_id,
+        settings.gcp_pubsub_topic_id,
+    )
     return False

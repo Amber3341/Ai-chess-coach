@@ -1,3 +1,4 @@
+import logging
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
@@ -8,6 +9,12 @@ from api.database import init_db
 from api.games.router import router as games_router
 from api.auth.router import router as auth_router
 from api.users.router import router as users_router
+
+
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(levelname)s:%(name)s:%(message)s",
+)
 
 
 @asynccontextmanager
@@ -51,4 +58,3 @@ def handle_pubsub_analyze_push_alias(
     db: Session = Depends(get_db),
 ):
     return handle_pubsub_analyze_push(request, db)
-
