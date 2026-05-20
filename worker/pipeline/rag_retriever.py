@@ -5,10 +5,13 @@ based on a query (e.g., game phase + critical move description).
 """
 from __future__ import annotations
 
+import logging
 from api.config import get_settings
 from google import genai
 from qdrant_client import QdrantClient
 from qdrant_client.models import ScoredPoint
+
+logger = logging.getLogger(__name__)
 
 
 COLLECTION_NAME = "chess-theory"
@@ -52,7 +55,7 @@ def _embed(text: str) -> list[float] | None:
         )
         return result.embeddings[0].values
     except Exception as e:
-        print(f"[RAG] Embedding error: {e}")
+        logger.error(f"[RAG] Embedding error: {e}")
         return None
 
 
@@ -72,10 +75,10 @@ def retrieve(query: str, top_k: int = 3) -> list[str]:
     try:
         existing = [c.name for c in qdrant.get_collections().collections]
         if collection not in existing:
-            print(f"[RAG] Collection '{collection}' not found. Run scripts/ingest_theory.py first.")
+            logger.warning(f"[RAG] Collection '{collection}' not found. Run scripts/ingest_theory.py first.")
             return []
     except Exception as e:
-        print(f"[RAG] Qdrant connection error: {e}")
+        logger.error(f"[RAG] Qdrant connection error: {e}")
         return []
 
     # Embed query
@@ -92,5 +95,5 @@ def retrieve(query: str, top_k: int = 3) -> list[str]:
         ).points
         return [r.payload["text"] for r in results if r.payload and "text" in r.payload]
     except Exception as e:
-        print(f"[RAG] Search error: {e}")
+        logger.error(f"[RAG] Search error: {e}")
         return []

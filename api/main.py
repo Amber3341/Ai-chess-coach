@@ -37,3 +37,18 @@ def health() -> dict[str, str]:
 app.include_router(auth_router, prefix=settings.api_prefix)
 app.include_router(users_router, prefix=settings.api_prefix)
 app.include_router(games_router, prefix=settings.api_prefix)
+
+
+# Route alias to support standard Pub/Sub endpoint format from guides
+from api.games.router import handle_pubsub_analyze_push, PubSubPushRequest
+from api.database import get_db
+from fastapi import Depends
+from sqlalchemy.orm import Session
+
+@app.post("/api/v1/internal/pubsub/analyze", status_code=200, tags=["games"])
+def handle_pubsub_analyze_push_alias(
+    request: PubSubPushRequest,
+    db: Session = Depends(get_db),
+):
+    return handle_pubsub_analyze_push(request, db)
+

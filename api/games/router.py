@@ -1,4 +1,9 @@
+import base64
+import json
+import logging
+
 from fastapi import APIRouter, BackgroundTasks, Depends, File, HTTPException, UploadFile, status
+from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from api.database import get_db
@@ -10,11 +15,13 @@ from api.games.service import (
     list_games,
     list_move_evaluations,
 )
-from worker.pipeline.orchestrator import AnalysisError, analyze_game
+from worker.pipeline.orchestrator import analyze_game
 from api.games.background import run_analysis_background
 from api.config import get_settings
 from api.models import User
 from api.auth.dependencies import get_current_user
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/games", tags=["games"])
 
@@ -130,14 +137,6 @@ def read_move_evaluations(
         )
     return list_move_evaluations(db, game_id)
 
-
-import base64
-import json
-import logging
-from pydantic import BaseModel
-from worker.pipeline.orchestrator import analyze_game
-
-logger = logging.getLogger(__name__)
 
 class PubSubMessageData(BaseModel):
     data: str

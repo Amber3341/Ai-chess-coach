@@ -99,9 +99,9 @@ The project is currently at the **Local AI MVP stage — Core AI pipeline fully 
 - **RAG Expansion**: Add more chess theory documents; currently 61 passages.
 
 ### 4.3 Architecture & Deployment (Remaining)
-- **Cloud Storage**: Upload PGN files to GCP Cloud Storage instead of local filesystem.
-- **GCP Pub/Sub + Cloud Run Worker**: Replace FastAPI BackgroundTasks with production-grade async job queue for scalability and reliability.
-- **Neon DB / PostgreSQL**: Migrate from SQLite to cloud Postgres for production.
+- **Cloud Storage**: Upload PGN files to GCP Cloud Storage instead of local filesystem. (DONE)
+- **GCP Pub/Sub + Cloud Run Worker**: Replace FastAPI BackgroundTasks with production-grade async job queue for scalability and reliability. (DONE)
+- **Neon DB / PostgreSQL**: Migrate from SQLite to cloud Postgres for production. (DONE)
 - **Dockerization**: `Dockerfile.api`, `Dockerfile.worker`, `docker-compose.yml`.
 - **GitHub Actions CI/CD**: Automated test, build, and deploy pipelines.
 - **Firebase Hosting**: Deploy React frontend.
@@ -129,7 +129,10 @@ The project is currently at the **Local AI MVP stage — Core AI pipeline fully 
 | `QDRANT_API_KEY` | Yes | Qdrant Cloud API key |
 | `QDRANT_COLLECTION` | Optional | Collection name (default: `chess-theory`) |
 
-## 6. Key File Map
+## 6. Known Issues & Deployment Notes
+- **Gemini API Rate Limiting (429 Quota Exhausted)**: The deployed version has experienced `429 RESOURCE_EXHAUSTED` errors when calling the Gemini 2.5 Flash API (free tier limit of 15-20 requests/day for some accounts). The AI pipeline now catches this, logs it via standard `logging` for GCP Logs Explorer, and falls back to Stockfish-only deterministic reporting, exposing the error in the `source_detail` field.
+
+## 7. Key File Map
 
 ```
 api/

@@ -1,4 +1,5 @@
 import json
+import logging
 from pydantic import BaseModel, Field
 from google import genai
 from google.genai import types
@@ -6,6 +7,8 @@ from api.config import get_settings
 from worker.pipeline.stockfish_engine import MoveEvaluationResult
 from worker.pipeline.report_builder import build_report
 from worker.pipeline.rag_retriever import retrieve as rag_retrieve
+
+logger = logging.getLogger(__name__)
 
 class CoachNote(BaseModel):
     ply: int
@@ -98,7 +101,8 @@ class GeminiCoach:
 
         except Exception as e:
             # Log error and fallback gracefully
-            print(f"Gemini API Error: {e}")
+            logger.error(f"Gemini API Error: {e}")
+            base_report["metadata"]["source_detail"] = f"Gemini LLM skipped (Error: {e})"
             return base_report
 
     def _build_prompt(self, white, black, result, critical_moments, theory_passages: list[str] | None = None) -> str:
