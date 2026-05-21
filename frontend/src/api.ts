@@ -30,6 +30,12 @@ export type ShareLinkResponse = {
   share_url: string;
 };
 
+export type UserProfile = {
+  id: string;
+  email: string;
+  display_name?: string | null;
+};
+
 export type MoveEvaluation = {
   ply: number;
   san: string;
