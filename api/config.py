@@ -23,6 +23,9 @@ class Settings(BaseSettings):
     gcp_project_id: str | None = None
     gcs_bucket_name: str | None = None
     gcp_pubsub_topic_id: str | None = None
+    google_client_id: str | None = None
+    google_client_secret: str | None = None
+    frontend_url: str = "http://localhost:5173"
 
     model_config = SettingsConfigDict(
         env_file=".env",

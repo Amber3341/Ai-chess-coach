@@ -1,10 +1,13 @@
-import { StrictMode, useEffect, useMemo, useState } from "react";
+import { StrictMode, useEffect, useMemo, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
 import {
   analyzeGame,
+  createShareLink,
   fetchGames,
+  fetchGame,
   fetchMoves,
   fetchReport,
+  fetchSharedReport,
   pollUntilComplete,
   type Game,
   type GameReport,
@@ -13,16 +16,18 @@ import {
 } from "./api";
 import { CriticalMomentBoard } from "./CriticalMomentBoard";
 import { MoveReplayBoard } from "./MoveReplayBoard";
-import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
+import { BrowserRouter, Routes, Route, Navigate, useLocation, useNavigate, useParams } from "react-router-dom";
 import { AuthProvider, useAuth } from "./AuthContext";
 import { LoginPage, RegisterPage } from "./AuthPages";
+import { OAuthCallback } from "./OAuthCallback";
 import "./styles.css";
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { user, loading } = useAuth();
+  const location = useLocation();
   
   if (loading) return <div style={{ padding: "2rem", textAlign: "center" }}>Loading user data...</div>;
-  if (!user) return <Navigate to="/login" />;
+  if (!user) return <Navigate to="/login" replace state={{ from: location }} />;
   
   return <>{children}</>;
 }
@@ -36,8 +41,12 @@ const HISTORY_FILTERS: Array<{ label: string; value: HistoryFilter }> = [
   { label: "Pending", value: "pending" },
   { label: "Failed", value: "failed" },
 ];
+const HISTORY_PAGE_SIZE = 10;
 
 function App() {
+  const { gameId } = useParams();
+  const navigate = useNavigate();
+  const failedGameIdRef = useRef<string | null>(null);
   const [file, setFile] = useState<File | null>(null);
   const [game, setGame] = useState<Game | null>(null);
   const [report, setReport] = useState<GameReport | null>(null);
@@ -48,6 +57,10 @@ function App() {
   const [historyLoading, setHistoryLoading] = useState(false);
   const [historyQuery, setHistoryQuery] = useState("");
   const [historyFilter, setHistoryFilter] = useState<HistoryFilter>("all");
+  const [historyPage, setHistoryPage] = useState(1);
+  const [historyTotal, setHistoryTotal] = useState(0);
+  const [historyTotalPages, setHistoryTotalPages] = useState(1);
+  const [shareUrl, setShareUrl] = useState<string | null>(null);
   const { user, logout } = useAuth();
 
   const stats = useMemo(
@@ -81,13 +94,39 @@ function App() {
   }, [history, historyFilter, historyQuery]);
 
   useEffect(() => {
-    void refreshHistory();
+    void refreshHistory(1);
   }, []);
 
-  async function refreshHistory() {
+  useEffect(() => {
+    if (!gameId) {
+      setGame(null);
+      setReport(null);
+      setMoves([]);
+      setState("idle");
+      setAnalyzeProgress(null);
+      setShareUrl(null);
+      return;
+    }
+
+    if (failedGameIdRef.current === gameId) {
+      return;
+    }
+
+    if (game?.id === gameId && state !== "idle") {
+      return;
+    }
+
+    void loadGameFromRoute(gameId);
+  }, [gameId, game?.id, state]);
+
+  async function refreshHistory(page = historyPage) {
     setHistoryLoading(true);
     try {
-      setHistory(await fetchGames());
+      const response = await fetchGames(page, HISTORY_PAGE_SIZE);
+      setHistory(response.items);
+      setHistoryPage(response.page);
+      setHistoryTotal(response.total);
+      setHistoryTotalPages(response.total_pages);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not load game history.");
     } finally {
@@ -105,7 +144,8 @@ function App() {
       const uploaded = await uploadGame(file);
       setGame(uploaded);
       setState("uploaded");
-      await refreshHistory();
+      navigate(`/games/${uploaded.id}`);
+      await refreshHistory(1);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Upload failed.");
       setState("failed");
@@ -123,6 +163,7 @@ function App() {
       // Trigger analysis — returns 202 immediately with status="processing"
       const triggered = await analyzeGame(game.id);
       setGame(triggered);
+      navigate(`/games/${triggered.id}`);
       setAnalyzeProgress("Running Stockfish evaluation + AI coaching (this may take ~30s)...");
 
       // Poll every 2s until the background job finishes
@@ -143,7 +184,7 @@ function App() {
       setReport(nextReport);
       setMoves(nextMoves);
       setState("complete");
-      await refreshHistory();
+      await refreshHistory(historyPage);
     } catch (err) {
       setAnalyzeProgress(null);
       setError(err instanceof Error ? err.message : "Analysis failed.");
@@ -152,16 +193,76 @@ function App() {
   }
 
   async function handleSelectGame(nextGame: Game) {
+    if (nextGame.id === gameId) {
+      await loadGameDetails(nextGame);
+      return;
+    }
+
+    navigate(`/games/${nextGame.id}`);
+  }
+
+  async function loadGameFromRoute(id: string) {
+    try {
+      failedGameIdRef.current = null;
+      const nextGame = await fetchGame(id);
+      await loadGameDetails(nextGame);
+    } catch (err) {
+      failedGameIdRef.current = id;
+      setGame(null);
+      setReport(null);
+      setMoves([]);
+      setState("failed");
+      setAnalyzeProgress(null);
+      setError(err instanceof Error ? err.message : "Could not load game.");
+    }
+  }
+
+  async function loadGameDetails(nextGame: Game) {
+    failedGameIdRef.current = null;
     setError(null);
     setGame(nextGame);
     setReport(null);
     setMoves([]);
-    setState(nextGame.status === "complete" ? "analyzing" : "uploaded");
+    setShareUrl(null);
+    setAnalyzeProgress(null);
 
-    if (nextGame.status !== "complete") {
+    if (nextGame.status === "failed") {
+      setState("failed");
+      setError(nextGame.error_message ?? "Analysis failed.");
       return;
     }
 
+    if (nextGame.status === "processing") {
+      setState("analyzing");
+      setAnalyzeProgress("Analysis is still running...");
+      try {
+        const completed = await pollUntilComplete(
+          nextGame.id,
+          (polled) => setGame(polled),
+        );
+
+        setAnalyzeProgress(null);
+        if (completed.status === "failed") {
+          throw new Error(completed.error_message ?? "Analysis failed.");
+        }
+
+        await loadGameDetails(completed);
+        return;
+      } catch (err) {
+        setAnalyzeProgress(null);
+        setError(err instanceof Error ? err.message : "Analysis failed.");
+        setState("failed");
+        return;
+      }
+    }
+
+    if (nextGame.status !== "complete") {
+      setState("uploaded");
+      return;
+    }
+
+    setState("analyzing");
+    setAnalyzeProgress("Loading saved report...");
     try {
       const [nextReport, nextMoves] = await Promise.all([
         fetchReport(nextGame.id),
@@ -170,7 +271,9 @@ function App() {
       setReport(nextReport);
       setMoves(nextMoves);
       setState("complete");
+      setAnalyzeProgress(null);
     } catch (err) {
+      setAnalyzeProgress(null);
       setError(err instanceof Error ? err.message : "Could not load report.");
       setState("failed");
     }
@@ -245,7 +348,7 @@ function App() {
               <button
                 className="icon-button"
                 disabled={historyLoading}
-                onClick={() => void refreshHistory()}
+                onClick={() => void refreshHistory(historyPage)}
                 title="Refresh game history"
               >
                 Refresh
@@ -291,6 +394,26 @@ function App() {
                 {historyLoading ? "Loading games..." : "No matching games."}
               </p>
             )}
+
+            <div className="history-pagination">
+              <button
+                className="secondary"
+                disabled={historyLoading || historyPage <= 1}
+                onClick={() => void refreshHistory(historyPage - 1)}
+              >
+                Previous
+              </button>
+      <span>
+                Page {historyPage} / {historyTotalPages} - {historyTotal} games
+              </span>
+              <button
+                className="secondary"
+                disabled={historyLoading || historyPage >= historyTotalPages}
+                onClick={() => void refreshHistory(historyPage + 1)}
+              >
+                Next
+              </button>
+            </div>
           </section>
         </aside>
 
@@ -307,7 +430,12 @@ function App() {
           {state === "analyzing" ? (
             <AnalysisLoading message={analyzeProgress} />
           ) : report ? (
-            <ReportView report={report} moves={moves} />
+            <ReportView
+              report={report}
+              moves={moves}
+              shareUrl={shareUrl}
+              onShare={game ? () => void handleCreateShareLink(game.id) : undefined}
+            />
           ) : (
             <div className="empty-state">
               <h2>No report loaded</h2>
@@ -318,6 +446,18 @@ function App() {
       </section>
     </main>
   );
+
+  async function handleCreateShareLink(gameId: string) {
+    setError(null);
+    try {
+      const response = await createShareLink(gameId);
+      const absoluteUrl = new URL(response.share_url, window.location.origin).toString();
+      setShareUrl(absoluteUrl);
+      await navigator.clipboard?.writeText(absoluteUrl);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not create share link.");
+    }
+  }
 }
 
 function AnalysisLoading({ message }: { message?: string | null }) {
@@ -332,7 +472,17 @@ function AnalysisLoading({ message }: { message?: string | null }) {
   );
 }
 
-function ReportView({ report, moves }: { report: GameReport; moves: MoveEvaluation[] }) {
+function ReportView({
+  report,
+  moves,
+  shareUrl,
+  onShare,
+}: {
+  report: GameReport;
+  moves: MoveEvaluation[];
+  shareUrl?: string | null;
+  onShare?: () => void;
+}) {
   const isFallbackReport = report.metadata.source === "material";
 
   return (
@@ -351,8 +501,21 @@ function ReportView({ report, moves }: { report: GameReport; moves: MoveEvaluati
       ) : null}
 
       <section className="report-section">
-        <h2>Summary</h2>
+        <div className="report-section-heading">
+          <h2>Summary</h2>
+          {onShare ? (
+            <button className="secondary" onClick={onShare}>
+              Share Report
+            </button>
+          ) : null}
+        </div>
         <p>{report.summary}</p>
+        {shareUrl ? (
+          <div className="share-link-box">
+            <span>Public share link copied</span>
+            <code>{shareUrl}</code>
+          </div>
+        ) : null}
       </section>
 
       <section className="report-section">
@@ -392,6 +555,61 @@ function Phase({ title, text }: { title: string; text: string }) {
   );
 }
 
+function SharedReportPage() {
+  const { shareToken } = useParams();
+  const [report, setReport] = useState<GameReport | null>(null);
+  const [moves, setMoves] = useState<MoveEvaluation[]>([]);
+  const [game, setGame] = useState<Game | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!shareToken) return;
+    const token = shareToken;
+    async function loadSharedReport() {
+      try {
+        const response = await fetchSharedReport(token);
+        setGame(response.game);
+        setReport(response.report);
+        setMoves(response.moves);
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "Could not load shared report.");
+      }
+    }
+
+    void loadSharedReport();
+  }, [shareToken]);
+
+  return (
+    <main className="app-shell shared-shell">
+      <header className="topbar">
+        <div>
+          <p className="eyebrow">ChessMentor AI</p>
+          <h1>Shared Coaching Report</h1>
+        </div>
+      </header>
+
+      {error ? <p className="error-banner">{error}</p> : null}
+
+      {game && report ? (
+        <section className="report-panel">
+          <div className="shared-game-heading">
+            <h2>
+              {game.white_player ?? "White"} vs {game.black_player ?? "Black"}
+            </h2>
+            <span className="status-pill status-complete">{game.result ?? "Result unknown"}</span>
+          </div>
+          <ReportView report={report} moves={moves} />
+        </section>
+      ) : !error ? (
+        <div className="empty-state">
+          <h2>Loading shared report</h2>
+          <p>Fetching the public coaching report.</p>
+        </div>
+      ) : null}
+    </main>
+  );
+}
+
 createRoot(document.getElementById("root")!).render(
   <StrictMode>
     <AuthProvider>
@@ -399,7 +617,14 @@ createRoot(document.getElementById("root")!).render(
         <Routes>
           <Route path="/login" element={<LoginPage />} />
           <Route path="/register" element={<RegisterPage />} />
+          <Route path="/oauth-callback" element={<OAuthCallback />} />
+          <Route path="/shared/:shareToken" element={<SharedReportPage />} />
           <Route path="/" element={
+            <ProtectedRoute>
+              <App />
+            </ProtectedRoute>
+          } />
+          <Route path="/games/:gameId" element={
             <ProtectedRoute>
               <App />
             </ProtectedRoute>

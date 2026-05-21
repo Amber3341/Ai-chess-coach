@@ -10,3 +10,6 @@ class UserProfile(BaseModel):
     
     class Config:
         from_attributes = True
+
+class UserUpdate(BaseModel):
+    display_name: Optional[str] = None

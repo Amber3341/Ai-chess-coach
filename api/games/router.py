@@ -2,16 +2,25 @@ import base64
 import json
 import logging
 
-from fastapi import APIRouter, BackgroundTasks, Depends, File, HTTPException, UploadFile, status
+from fastapi import APIRouter, BackgroundTasks, Depends, File, HTTPException, Query, UploadFile, status
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from api.database import get_db
-from api.games.models import GameReportResponse, GameResponse, MoveEvaluationResponse
+from api.games.models import (
+    GameListResponse,
+    GameReportResponse,
+    GameResponse,
+    MoveEvaluationResponse,
+    ShareLinkResponse,
+    SharedReportResponse,
+)
 from api.games.service import (
     InvalidPGNError,
     create_game_from_upload,
+    ensure_share_token,
     get_game,
+    get_game_by_share_token,
     list_games,
     list_move_evaluations,
 )
@@ -41,12 +50,24 @@ async def upload_game(
         ) from exc
 
 
-@router.get("", response_model=list[GameResponse])
+@router.get("", response_model=GameListResponse)
 def read_games(
+    page: int = Query(1, ge=1),
+    page_size: int = Query(10, ge=1, le=50),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
-) -> list[GameResponse]:
-    return list_games(db, current_user.id)
+) -> GameListResponse:
+    games, total = list_games(db, current_user.id, page=page, page_size=page_size)
+    total_pages = max(1, (total + page_size - 1) // page_size)
+    return GameListResponse(
+        items=games,
+        total=total,
+        page=page,
+        page_size=page_size,
+        total_pages=total_pages,
+        has_next=page < total_pages,
+        has_previous=page > 1,
+    )
 
 
 @router.get("/{game_id}", response_model=GameResponse)
@@ -140,6 +161,55 @@ def read_move_evaluations(
             detail="Game not found.",
         )
     return list_move_evaluations(db, game_id)
+
+
+@router.post("/{game_id}/share", response_model=ShareLinkResponse)
+def create_share_link(
+    game_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> ShareLinkResponse:
+    game = get_game(db, game_id, current_user.id)
+    if game is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Game not found.",
+        )
+    if game.status != "complete" or game.report is None:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Only completed reports can be shared.",
+        )
+
+    token = ensure_share_token(db, game)
+    return ShareLinkResponse(
+        share_token=token,
+        share_url=f"/shared/{token}",
+    )
+
+
+@router.get("/shared/{share_token}", response_model=SharedReportResponse)
+def read_shared_report(
+    share_token: str,
+    db: Session = Depends(get_db),
+) -> SharedReportResponse:
+    game = get_game_by_share_token(db, share_token)
+    if game is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Shared report not found.",
+        )
+    if game.status != "complete" or game.report is None:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Shared report is not ready.",
+        )
+
+    return SharedReportResponse(
+        game=game,
+        report=game.report,
+        moves=list_move_evaluations(db, game.id),
+    )
 
 
 class PubSubMessageData(BaseModel):

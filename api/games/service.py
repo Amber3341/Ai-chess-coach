@@ -1,4 +1,5 @@
 import io
+import secrets
 from pathlib import Path
 
 import chess.pgn
@@ -74,13 +75,34 @@ def get_game(db: Session, game_id: str, user_id: str) -> Game | None:
     return db.query(Game).filter(Game.id == game_id, Game.user_id == user_id).first()
 
 
-def list_games(db: Session, user_id: str, limit: int = 20) -> list[Game]:
+def get_game_by_share_token(db: Session, share_token: str) -> Game | None:
+    return db.query(Game).filter(Game.share_token == share_token).first()
+
+
+def ensure_share_token(db: Session, game: Game) -> str:
+    if game.share_token:
+        return game.share_token
+
+    while True:
+        token = secrets.token_urlsafe(24)
+        if get_game_by_share_token(db, token) is None:
+            game.share_token = token
+            db.commit()
+            db.refresh(game)
+            return token
+
+
+def list_games(db: Session, user_id: str, page: int = 1, page_size: int = 10) -> tuple[list[Game], int]:
+    total = db.query(Game).filter(Game.user_id == user_id).count()
+    offset = (page - 1) * page_size
     return (
         db.query(Game)
         .filter(Game.user_id == user_id)
         .order_by(Game.created_at.desc())
-        .limit(limit)
-        .all()
+        .offset(offset)
+        .limit(page_size)
+        .all(),
+        total,
     )
 
 

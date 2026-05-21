@@ -1,0 +1,9 @@
+[Event "ChessMentor Queen Blunder Test"]
+[Site "Local"]
+[Date "2026.05.20"]
+[Round "-"]
+[White "Blunder Tester"]
+[Black "Tactical Tester"]
+[Result "0-1"]
+
+1. e4 e5 2. Nf3 Nc6 3. Bc4 Bc5 4. O-O Nf6 5. Re1 O-O 6. d3 d6 7. Bg5 h6 8. Bh4 g5 9. Nxg5 hxg5 10. Bxg5 Kg7 11. Nc3 Rh8 12. Nd5 Nxd5 13. Bxd8 Nf4 14. Bxc7 Bh3 15. gxh3 Nxh3+ 16. Kg2 Nf4+ 17. Kf3 Rh3+ 18. Kg4 Rah8 19. Rg1 R8h5 20. Bxd6 Kg6 21. Bxf7+ Kxf7 22. Bxc5 Nd8 23. d4 Nde6 24. d5 Rg5# 0-1

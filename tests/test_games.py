@@ -40,6 +40,11 @@ def client(monkeypatch: pytest.MonkeyPatch) -> Generator[TestClient, None, None]
 
     monkeypatch.setattr(get_settings(), "upload_dir", test_dir / "uploads")
     monkeypatch.setattr(get_settings(), "database_url", f"sqlite:///{test_dir / 'test.db'}")
+    monkeypatch.setattr(get_settings(), "gemini_api_key", None)
+    monkeypatch.setattr(get_settings(), "qdrant_url", None)
+    monkeypatch.setattr(get_settings(), "qdrant_api_key", None)
+    monkeypatch.setattr(get_settings(), "gcp_project_id", None)
+    monkeypatch.setattr(get_settings(), "gcp_pubsub_topic_id", None)
     app.dependency_overrides[get_db] = override_get_db
     app.dependency_overrides[get_current_user] = override_get_current_user
     try:
@@ -109,12 +114,44 @@ def test_list_games_returns_recent_uploads_first(client: TestClient) -> None:
     response = client.get("/api/v1/games")
 
     assert response.status_code == 200
-    games = response.json()
+    body = response.json()
+    games = body["items"]
+    assert body["total"] == 2
+    assert body["page"] == 1
+    assert body["page_size"] == 10
+    assert body["total_pages"] == 1
+    assert body["has_next"] is False
+    assert body["has_previous"] is False
     assert [game["id"] for game in games] == [
         second_response.json()["id"],
         first_response.json()["id"],
     ]
     assert games[0]["white_player"] == "SecondWhite"
+
+
+def test_list_games_paginates(client: TestClient) -> None:
+    for index in range(3):
+        pgn = f"""[Event "Game {index}"]
+[White "White{index}"]
+[Black "Black{index}"]
+[Result "1-0"]
+
+1. e4 e5 1-0
+"""
+        client.post(
+            "/api/v1/games",
+            files={"file": (f"game-{index}.pgn", pgn, "application/x-chess-pgn")},
+        )
+
+    response = client.get("/api/v1/games?page=1&page_size=2")
+
+    assert response.status_code == 200
+    body = response.json()
+    assert len(body["items"]) == 2
+    assert body["total"] == 3
+    assert body["total_pages"] == 2
+    assert body["has_next"] is True
+    assert body["has_previous"] is False
 
 
 def test_run_local_analysis_completes_game_and_records_moves(client: TestClient) -> None:
@@ -177,6 +214,43 @@ def test_run_local_analysis_completes_game_and_records_moves(client: TestClient)
         "action_plan",
         "metadata",
     }
+
+
+def test_completed_report_can_be_shared_publicly(client: TestClient) -> None:
+    pgn = """[Event "Share Test"]
+[White "Arjun"]
+[Black "Player2"]
+[Result "1-0"]
+
+1. e4 e5 2. Nf3 Nc6 1-0
+"""
+
+    upload_response = client.post(
+        "/api/v1/games",
+        files={"file": ("share.pgn", pgn, "application/x-chess-pgn")},
+    )
+    game_id = upload_response.json()["id"]
+    client.post(f"/api/v1/games/{game_id}/analyze")
+
+    for _ in range(10):
+        game_response = client.get(f"/api/v1/games/{game_id}")
+        if game_response.json()["status"] != "processing":
+            break
+
+    share_response = client.post(f"/api/v1/games/{game_id}/share")
+
+    assert share_response.status_code == 200
+    share_body = share_response.json()
+    assert share_body["share_token"]
+    assert share_body["share_url"].startswith("/shared/")
+
+    public_response = client.get(f"/api/v1/games/shared/{share_body['share_token']}")
+
+    assert public_response.status_code == 200
+    public_body = public_response.json()
+    assert public_body["game"]["id"] == game_id
+    assert public_body["report"]["summary"]
+    assert len(public_body["moves"]) == 4
 
 
 

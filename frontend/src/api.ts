@@ -1,4 +1,4 @@
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? "http://127.0.0.1:8000";
+export const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? "https://chessmentor-api-591202885436.asia-south1.run.app";
 
 export type Game = {
   id: string;
@@ -13,6 +13,21 @@ export type Game = {
   report_summary: string | null;
   error_message: string | null;
   created_at: string;
+};
+
+export type GameListResponse = {
+  items: Game[];
+  total: number;
+  page: number;
+  page_size: number;
+  total_pages: number;
+  has_next: boolean;
+  has_previous: boolean;
+};
+
+export type ShareLinkResponse = {
+  share_token: string;
+  share_url: string;
 };
 
 export type MoveEvaluation = {
@@ -56,6 +71,12 @@ export type GameReport = {
   };
 };
 
+export type SharedReportResponse = {
+  game: Game;
+  report: GameReport;
+  moves: MoveEvaluation[];
+};
+
 async function request<T>(path: string, options?: RequestInit): Promise<T> {
   const headers = new Headers(options?.headers);
   const token = localStorage.getItem("token");
@@ -80,8 +101,8 @@ export function uploadGame(file: File): Promise<Game> {
   return request<Game>("/api/v1/games", { method: "POST", body: formData });
 }
 
-export function fetchGames(): Promise<Game[]> {
-  return request<Game[]>("/api/v1/games");
+export function fetchGames(page = 1, pageSize = 10): Promise<GameListResponse> {
+  return request<GameListResponse>(`/api/v1/games?page=${page}&page_size=${pageSize}`);
 }
 
 export function analyzeGame(gameId: string): Promise<Game> {
@@ -94,6 +115,16 @@ export function fetchReport(gameId: string): Promise<GameReport> {
 
 export function fetchMoves(gameId: string): Promise<MoveEvaluation[]> {
   return request<MoveEvaluation[]>(`/api/v1/games/${gameId}/moves`);
+}
+
+export function createShareLink(gameId: string): Promise<ShareLinkResponse> {
+  return request<ShareLinkResponse>(`/api/v1/games/${gameId}/share`, {
+    method: "POST",
+  });
+}
+
+export function fetchSharedReport(shareToken: string): Promise<SharedReportResponse> {
+  return request<SharedReportResponse>(`/api/v1/games/shared/${shareToken}`);
 }
 
 export function fetchGame(gameId: string): Promise<Game> {
@@ -150,6 +181,20 @@ export function register(data: any): Promise<{ access_token: string }> {
   });
 }
 
+export function updateUser(data: { display_name?: string }): Promise<UserProfile> {
+  return request<UserProfile>('/api/v1/users/me', {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data),
+  });
+}
+
+export function deleteUser(): Promise<void> {
+  return request<void>('/api/v1/users/me', {
+    method: 'DELETE',
+  });
+}
+
 export function getMe(): Promise<any> {
-  return request<any>("/api/v1/users/me");
+  return request<any>('/api/v1/users/me');
 }

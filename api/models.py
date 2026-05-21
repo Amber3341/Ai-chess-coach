@@ -52,6 +52,7 @@ class Game(Base):
     black_player: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
     report_summary: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     report: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)
+    share_token: Mapped[Optional[str]] = mapped_column(String(64), unique=True, index=True, nullable=True)
     error_message: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),

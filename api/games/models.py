@@ -20,6 +20,21 @@ class GameResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
 
+class ShareLinkResponse(BaseModel):
+    share_token: str
+    share_url: str
+
+
+class GameListResponse(BaseModel):
+    items: list[GameResponse]
+    total: int
+    page: int
+    page_size: int
+    total_pages: int
+    has_next: bool
+    has_previous: bool
+
+
 class MoveEvaluationResponse(BaseModel):
     ply: int
     san: str
@@ -65,3 +80,9 @@ class GameReportResponse(BaseModel):
     endgame_review: str
     action_plan: list[str] = Field(default_factory=list)
     metadata: ReportMetadataResponse
+
+
+class SharedReportResponse(BaseModel):
+    game: GameResponse
+    report: GameReportResponse
+    moves: list[MoveEvaluationResponse]
