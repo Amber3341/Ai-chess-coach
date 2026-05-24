@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Chessboard } from "react-chessboard";
+import { Chess } from "chess.js";
 import type { MoveEvaluation } from "./api";
 
 export function MoveReplayBoard({ moves }: { moves: MoveEvaluation[] }) {
@@ -37,6 +38,36 @@ export function MoveReplayBoard({ moves }: { moves: MoveEvaluation[] }) {
     activeMoveRef.current?.scrollIntoView({ block: "nearest", behavior: "smooth" });
   }, [activeIndex]);
 
+  const arrowSquares = useMemo(() => {
+    if (!activeMove || !moves.length) return null;
+    const c = new Chess();
+    let from = "";
+    let to = "";
+    for (let i = 0; i <= activeIndex; i++) {
+      if (i === activeIndex) {
+        try {
+          const moveObj = c.move(moves[i].san);
+          from = moveObj.from;
+          to = moveObj.to;
+        } catch {
+          // ignore
+        }
+      } else {
+        try {
+          c.move(moves[i].san);
+        } catch {
+          // ignore
+        }
+      }
+    }
+    return from && to ? { from, to } : null;
+  }, [moves, activeIndex, activeMove]);
+
+  const winChance = useMemo(() => {
+    if (!activeMove || activeMove.eval_cp === undefined) return 50;
+    return 50 + 50 * (2 / (1 + Math.exp(-0.00368208 * activeMove.eval_cp)) - 1);
+  }, [activeMove]);
+
   const boardOptions = useMemo(
     () => ({
       id: "move-replay-board",
@@ -49,10 +80,12 @@ export function MoveReplayBoard({ moves }: { moves: MoveEvaluation[] }) {
         boxShadow: "0 10px 24px rgba(24, 32, 47, 0.18)",
         overflow: "hidden",
       },
+      arrows: arrowSquares ? [{ startSquare: arrowSquares.from, endSquare: arrowSquares.to, color: "rgba(139, 92, 246, 0.8)" }] : [],
+      customArrows: arrowSquares ? [[arrowSquares.from, arrowSquares.to, "rgba(139, 92, 246, 0.8)"]] : [],
       lightSquareStyle: { backgroundColor: "#eff4f7" },
       darkSquareStyle: { backgroundColor: "#31516f" },
     }),
-    [activeMove?.fen],
+    [activeMove?.fen, arrowSquares],
   );
 
   if (moves.length === 0) {
@@ -62,8 +95,13 @@ export function MoveReplayBoard({ moves }: { moves: MoveEvaluation[] }) {
   return (
     <div className="replay-grid">
       <div className="replay-board-column">
-        <div className="board-stage">
-          <Chessboard options={boardOptions} />
+        <div className="board-with-eval">
+          <div className="eval-bar">
+            <div className="eval-fill" style={{ height: `${winChance}%` }} />
+          </div>
+          <div className="board-stage">
+            <Chessboard options={boardOptions} />
+          </div>
         </div>
 
         <div className="replay-controls">
