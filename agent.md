@@ -40,7 +40,18 @@ The core product flow is functional end-to-end:
 - **CORS Issues**: When testing the frontend against a local or deployed backend, ensure `CORS_ORIGINS` in the backend's `.env` matches the frontend URL.
 - **Relative Imports**: The Python backend uses absolute imports (e.g., `from api.models import User`). Do not use relative imports like `from ..models import User` across top-level modules.
 
-## 5. Useful Commands
+## 5. AI Agent Workflow Protocol (CRITICAL)
+Whenever a user requests a new feature, UI overhaul, or complex bug fix, you MUST default to the **Multi-Agent Branched Workflow** without asking the user to manually request it. 
+
+**The Workflow:**
+1. **Plan**: Formally draft an `implementation_plan.md` and wait for user approval.
+2. **Track**: Create a `task.md` to track progress.
+3. **Branch & Code**: Use `invoke_subagent` to spawn a "Coder" subagent in a `branch` workspace. Instruct the Coder to implement the feature.
+4. **Review**: Once the Coder finishes, the main agent MUST step in as the **Reviewer**. Run `git status` and `git diff` on the Coder's branched workspace to heavily scrutinize the code. If errors are found, send a message to the Coder to fix them.
+5. **Merge**: Once the code is flawless, use `Copy-Item` or `git` to merge the Coder's files into the main workspace.
+6. **Walkthrough**: Generate a `walkthrough.md` explaining the final results.
+
+## 6. Useful Commands
 
 ### 🐍 Backend & Worker Setup (Root Directory)
 ```powershell
