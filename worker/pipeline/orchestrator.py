@@ -4,7 +4,7 @@ import logging
 from sqlalchemy.orm import Session
 
 from api.models import Game, MoveEvaluation
-from worker.pipeline.llm_coach import GeminiCoach
+from worker.pipeline.llm_coach import get_coach
 from worker.pipeline.stockfish_engine import evaluate_pgn_auto
 
 logger = logging.getLogger(__name__)
@@ -34,7 +34,7 @@ def analyze_game(db: Session, game_id: str) -> Game:
         game.inaccuracies = sum(
             1 for item in evaluations if item.classification == "inaccuracy"
         )
-        coach = GeminiCoach()
+        coach = get_coach()
         game.report = coach.generate_report(
             white_player=game.white_player,
             black_player=game.black_player,

@@ -23,6 +23,8 @@ def build_report(
         "middlegame_review": _phase_review("middlegame", phase_counts["middlegame"]),
         "endgame_review": _phase_review("endgame", phase_counts["endgame"]),
         "action_plan": _action_plan(critical_moments),
+        # Optimization #8: expose phase_counts so llm_coach can embed them in the prompt
+        "phase_counts": phase_counts,
         "metadata": {
             "white_player": white,
             "black_player": black,
@@ -68,6 +70,10 @@ def _critical_moments(evaluations: list[MoveEvaluationResult]) -> list[dict]:
         reverse=True,
     )
 
+    # Optimization #15: dynamic cap — roughly 1 critical moment per 20 plies,
+    # but always at least 3 and at most 5 for long games.
+    cap = min(5, max(3, len(evaluations) // 20))
+
     return [
         {
             "ply": item.ply,
@@ -79,9 +85,11 @@ def _critical_moments(evaluations: list[MoveEvaluationResult]) -> list[dict]:
             "classification": item.classification,
             "best_move_uci": item.best_move_uci,
             "best_move_san": item.best_move_san,
+            # Optimization #4: pass best line through to prompt
+            "best_line_san": list(item.best_line_san) if item.best_line_san else [],
             "coach_note": _coach_note(item),
         }
-        for item in candidates[:3]
+        for item in candidates[:cap]
     ]
 
 
@@ -91,11 +99,15 @@ def _coach_note(item: MoveEvaluationResult) -> str:
     best_move_text = (
         f" Stockfish preferred {best_move} instead." if best_move else ""
     )
+    # Include best line if available for richer context
+    line_text = ""
+    if item.best_line_san:
+        line_text = f" Best continuation: {' '.join(item.best_line_san[:3])}."
     return (
         f"Engine evaluation after {item.san} is {eval_pawns:+.2f}. "
         f"Treat this as a {item.classification} candidate and review the tactic "
         "or positional concession around this move."
-        f"{best_move_text}"
+        f"{best_move_text}{line_text}"
     )
 
 

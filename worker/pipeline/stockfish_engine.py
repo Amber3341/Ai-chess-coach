@@ -1,8 +1,9 @@
 import asyncio
 import io
 import sys
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
+from typing import Optional
 
 import chess
 import chess.engine
@@ -30,15 +31,17 @@ class MoveEvaluationResult:
     classification: str
     best_move_uci: str | None
     best_move_san: str | None
+    # Optimization #4: top-3 moves of the engine's best line for richer LLM context
+    best_line_san: tuple[str, ...] = field(default_factory=tuple)
     source: str = "material"
     source_detail: str | None = None
 
 
 def evaluate_pgn(pgn_text: str) -> list[MoveEvaluationResult]:
-    """Evaluate a PGN locally.
+    """Evaluate a PGN locally using material balance.
 
-    This is a deterministic material-balance evaluator used while the app is
-    still local-only. The module boundary mirrors the future Stockfish wrapper.
+    This is a deterministic material-balance evaluator used as a fallback when
+    Stockfish is not available. The module boundary mirrors the Stockfish wrapper.
     """
     game = chess.pgn.read_game(io.StringIO(normalize_pgn_text(pgn_text)))
     if game is None:
@@ -50,12 +53,11 @@ def evaluate_pgn(pgn_text: str) -> list[MoveEvaluationResult]:
 
     for ply, move in enumerate(game.mainline_moves(), start=1):
         san = board.san(move)
-        best_move_uci = None
-        best_move_san = None
         board.push(move)
         eval_cp = _material_eval_cp(board)
         delta = eval_cp - previous_eval
-        classification = _classify_delta(delta=delta, white_to_move=ply % 2 == 1)
+        # Optimization #16: phase-aware classification thresholds
+        classification = _classify_delta(delta=delta, white_to_move=ply % 2 == 1, ply=ply)
         evaluations.append(
             MoveEvaluationResult(
                 ply=ply,
@@ -63,8 +65,9 @@ def evaluate_pgn(pgn_text: str) -> list[MoveEvaluationResult]:
                 fen=board.fen(),
                 eval_cp=eval_cp,
                 classification=classification,
-                best_move_uci=best_move_uci,
-                best_move_san=best_move_san,
+                best_move_uci=None,
+                best_move_san=None,
+                best_line_san=(),
                 source="material",
                 source_detail=None,
             )
@@ -92,16 +95,43 @@ def evaluate_pgn_with_stockfish(
     evaluations: list[MoveEvaluationResult] = []
 
     with chess.engine.SimpleEngine.popen_uci(str(stockfish_path)) as engine:
-        previous_eval = _engine_eval_cp(engine, board, depth, time_limit_seconds)
+        limit = chess.engine.Limit(depth=depth, time=time_limit_seconds)
+
+        # Optimization #5: get pre-move eval in a single analyse call
+        pre_info = engine.analyse(board, limit)
+        previous_eval = _score_to_cp(pre_info["score"])
+
         for ply, move in enumerate(game.mainline_moves(), start=1):
             san = board.san(move)
-            best_move = _engine_best_move(engine, board, depth, time_limit_seconds)
+
+            # Optimization #5 + #4: ONE analyse() call before pushing gives us
+            # the best move AND the full PV line — no separate engine.play() needed.
+            info = engine.analyse(board, limit)
+            pv: list[chess.Move] = info.get("pv") or []
+            best_move: Optional[chess.Move] = pv[0] if pv else None
             best_move_uci = best_move.uci() if best_move else None
             best_move_san = board.san(best_move) if best_move else None
+
+            # Capture up to 3 moves of the best line in SAN notation
+            best_line_san: list[str] = []
+            temp_board = board.copy()
+            for pv_move in pv[:3]:
+                try:
+                    best_line_san.append(temp_board.san(pv_move))
+                    temp_board.push(pv_move)
+                except Exception:
+                    break
+
             board.push(move)
-            eval_cp = _engine_eval_cp(engine, board, depth, time_limit_seconds)
+
+            # Post-move eval — single call
+            post_info = engine.analyse(board, limit)
+            eval_cp = _score_to_cp(post_info["score"])
+
             delta = eval_cp - previous_eval
-            classification = _classify_delta(delta=delta, white_to_move=ply % 2 == 1)
+            # Optimization #16: phase-aware thresholds
+            classification = _classify_delta(delta=delta, white_to_move=ply % 2 == 1, ply=ply)
+
             evaluations.append(
                 MoveEvaluationResult(
                     ply=ply,
@@ -111,6 +141,7 @@ def evaluate_pgn_with_stockfish(
                     classification=classification,
                     best_move_uci=best_move_uci,
                     best_move_san=best_move_san,
+                    best_line_san=tuple(best_line_san),
                     source="stockfish",
                     source_detail=str(stockfish_path),
                 )
@@ -125,10 +156,10 @@ def evaluate_pgn_with_stockfish(
 
 def evaluate_pgn_auto(pgn_text: str) -> list[MoveEvaluationResult]:
     settings = get_settings()
-    
+
     # Use path from settings, or fallback to the Docker default
     stockfish_path = settings.stockfish_path or Path("/usr/games/stockfish")
-    
+
     if stockfish_path.exists():
         try:
             return evaluate_pgn_with_stockfish(
@@ -164,6 +195,7 @@ def _with_source_detail(
             classification=item.classification,
             best_move_uci=item.best_move_uci,
             best_move_san=item.best_move_san,
+            best_line_san=item.best_line_san,
             source=item.source,
             source_detail=source_detail,
         )
@@ -180,34 +212,15 @@ def _ensure_subprocess_event_loop_policy() -> None:
         asyncio.set_event_loop_policy(asyncio.WindowsProactorEventLoopPolicy())
 
 
-def _engine_eval_cp(
-    engine: chess.engine.SimpleEngine,
-    board: chess.Board,
-    depth: int,
-    time_limit_seconds: float,
-) -> int:
-    limit = chess.engine.Limit(depth=depth, time=time_limit_seconds)
-    info = engine.analyse(board, limit)
-    score = info["score"].white()
-
-    if score.is_mate():
-        mate = score.mate()
+def _score_to_cp(score: chess.engine.PovScore) -> int:
+    """Convert a PovScore (from White's perspective) to centipawns."""
+    white_score = score.white()
+    if white_score.is_mate():
+        mate = white_score.mate()
         if mate is None:
             return 0
-        return 100000 if mate > 0 else -100000
-
-    return score.score(mate_score=100000) or 0
-
-
-def _engine_best_move(
-    engine: chess.engine.SimpleEngine,
-    board: chess.Board,
-    depth: int,
-    time_limit_seconds: float,
-) -> chess.Move | None:
-    limit = chess.engine.Limit(depth=depth, time=time_limit_seconds)
-    result = engine.play(board, limit)
-    return result.move
+        return 100_000 if mate > 0 else -100_000
+    return white_score.score(mate_score=100_000) or 0
 
 
 def _material_eval_cp(board: chess.Board) -> int:
@@ -218,14 +231,26 @@ def _material_eval_cp(board: chess.Board) -> int:
     return score
 
 
-def _classify_delta(delta: int, white_to_move: bool) -> str:
+def _classify_delta(delta: int, white_to_move: bool, ply: int = 0) -> str:
+    """Classify a move's evaluation delta.
+
+    Optimization #16: endgame positions use tighter thresholds because small
+    centipawn swings are often decisive when material is scarce.
+    """
     player_delta = delta if white_to_move else -delta
     loss = -player_delta
 
-    if loss >= 200:
+    move_number = (ply + 1) // 2
+    is_endgame = move_number > 35
+
+    blunder_threshold = 150 if is_endgame else 200
+    mistake_threshold = 40 if is_endgame else 50
+    inaccuracy_threshold = 15 if is_endgame else 20
+
+    if loss >= blunder_threshold:
         return "blunder"
-    if loss >= 50:
+    if loss >= mistake_threshold:
         return "mistake"
-    if loss >= 20:
+    if loss >= inaccuracy_threshold:
         return "inaccuracy"
     return "ok"
