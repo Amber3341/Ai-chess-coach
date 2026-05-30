@@ -69,6 +69,7 @@ AI-powered chess coaching platform. Upload a PGN, run analysis, and get a person
 - Game history sidebar with search and status filters
 - Paginated game history API and Previous/Next controls in the sidebar
 - Public share links for completed reports via `/shared/{token}`
+- Deployed to Firebase Hosting (`https://ai-chess-mentor.web.app`)
 
 ### Testing & Test Assets
 
@@ -114,6 +115,16 @@ npm run dev
 Then open:
 
 - Web app: <http://127.0.0.1:5173>
+
+### Frontend Deployment
+
+To deploy a new production build of the frontend to Firebase Hosting:
+
+```powershell
+cd frontend
+npm run build
+npx firebase-tools deploy --only hosting
+```
 
 ### Ingest Chess Theory into Qdrant
 
@@ -235,8 +246,6 @@ Avoid `--set-env-vars` during redeploy unless you include every variable. Use `-
 
 ### Architecture & Deployment
 
-- Firebase Hosting deployment for the React frontend
-- Add final Firebase Hosting URL to backend `CORS_ORIGINS`
 - GitHub Actions CI/CD for backend tests, frontend build, and deploys
 - Move secrets from plain Cloud Run env vars to GCP Secret Manager
 - Replace public Cloud Run invoker access with OIDC-authenticated Pub/Sub push
