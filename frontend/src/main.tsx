@@ -61,6 +61,7 @@ function App() {
   const [historyTotal, setHistoryTotal] = useState(0);
   const [historyTotalPages, setHistoryTotalPages] = useState(1);
   const [shareUrl, setShareUrl] = useState<string | null>(null);
+  const [showLogoutModal, setShowLogoutModal] = useState(false);
   const { user, logout } = useAuth();
 
   const stats = useMemo(
@@ -288,7 +289,7 @@ function App() {
         </div>
         <div style={{ display: "flex", gap: "1rem", alignItems: "center" }}>
           <span>{user?.display_name || user?.email}</span>
-          <button className="secondary" onClick={logout}>Log Out</button>
+          <button className="secondary" onClick={() => setShowLogoutModal(true)}>Log Out</button>
           <div className={`status-pill status-${state}`}>{state}</div>
         </div>
       </header>
@@ -427,7 +428,15 @@ function App() {
             ))}
           </div>
 
-          {state === "analyzing" ? (
+          {state === "uploading" ? (
+            <div className="analysis-loading" role="status" aria-live="polite">
+              <div className="spinner" aria-hidden="true" />
+              <div>
+                <h2>Uploading PGN...</h2>
+                <p>Please wait while your file is uploaded and parsed.</p>
+              </div>
+            </div>
+          ) : state === "analyzing" ? (
             <AnalysisLoading message={analyzeProgress} />
           ) : report ? (
             <ReportView
@@ -444,6 +453,22 @@ function App() {
           )}
         </section>
       </section>
+
+      {showLogoutModal ? (
+        <div className="modal-overlay">
+          <div className="modal-content" role="dialog" aria-modal="true">
+            <h2>Log Out</h2>
+            <p>Are you sure you want to log out of your account?</p>
+            <div className="modal-actions">
+              <button className="secondary" onClick={() => setShowLogoutModal(false)}>Cancel</button>
+              <button onClick={() => {
+                setShowLogoutModal(false);
+                logout();
+              }}>Log Out</button>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </main>
   );
 
