@@ -62,6 +62,7 @@ function App() {
   const [historyTotalPages, setHistoryTotalPages] = useState(1);
   const [shareUrl, setShareUrl] = useState<string | null>(null);
   const [showLogoutModal, setShowLogoutModal] = useState(false);
+  const [isDragging, setIsDragging] = useState(false);
   const { user, logout } = useAuth();
 
   const stats = useMemo(
@@ -165,7 +166,7 @@ function App() {
       const triggered = await analyzeGame(game.id);
       setGame(triggered);
       navigate(`/games/${triggered.id}`);
-      setAnalyzeProgress("Running Stockfish evaluation + AI coaching (this may take ~30s)...");
+      setAnalyzeProgress(null);
 
       // Poll every 2s until the background job finishes
       const completed = await pollUntilComplete(
@@ -280,6 +281,34 @@ function App() {
     }
   }
 
+  function handleDragOver(e: React.DragEvent) {
+    e.preventDefault();
+    setIsDragging(true);
+  }
+
+  function handleDragLeave(e: React.DragEvent) {
+    e.preventDefault();
+    setIsDragging(false);
+  }
+
+  function handleDrop(e: React.DragEvent) {
+    e.preventDefault();
+    setIsDragging(false);
+    if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+      setFile(e.dataTransfer.files[0]);
+    }
+  }
+
+  function resetWorkspace() {
+    setGame(null);
+    setReport(null);
+    setMoves([]);
+    setState("idle");
+    setFile(null);
+    setError(null);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }
+
   return (
     <main className="app-shell">
       <header className="topbar">
@@ -297,14 +326,19 @@ function App() {
       <section className="workspace-grid">
         <aside className="upload-panel">
           <h2>Upload PGN</h2>
-          <label className="drop-zone">
+          <label 
+            className={`drop-zone ${isDragging ? "is-dragging" : ""}`}
+            onDragOver={handleDragOver}
+            onDragLeave={handleDragLeave}
+            onDrop={handleDrop}
+          >
             <input
               type="file"
               accept=".pgn"
               onChange={(event) => setFile(event.target.files?.[0] ?? null)}
             />
             <span className="drop-icon">+</span>
-            <span>{file ? file.name : "Choose a .pgn file"}</span>
+            <span>{file ? file.name : "Drag & drop or Choose a .pgn file"}</span>
           </label>
 
           <div className="button-row">
@@ -449,6 +483,7 @@ function App() {
               moves={moves}
               shareUrl={shareUrl}
               onShare={game ? () => void handleCreateShareLink(game.id) : undefined}
+              onReset={resetWorkspace}
             />
           ) : (
             <div className="empty-state">
@@ -491,12 +526,30 @@ function App() {
 }
 
 function AnalysisLoading({ message }: { message?: string | null }) {
+  const [step, setStep] = useState(0);
+  
+  const steps = useMemo(() => [
+    "Evaluating Opening lines...",
+    "Scanning for blunders...",
+    "Analyzing middlegame tactics...",
+    "Reviewing endgame technique...",
+    "Writing personalized coaching notes...",
+    "Finalizing report..."
+  ], []);
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setStep((s) => (s + 1) % steps.length);
+    }, 6000);
+    return () => clearInterval(interval);
+  }, [steps.length]);
+
   return (
     <div className="analysis-loading" role="status" aria-live="polite">
       <div className="spinner" aria-hidden="true" />
       <div>
         <h2>Analyzing game</h2>
-        <p>{message ?? "Running engine evaluation and preparing the coaching report."}</p>
+        <p>{message ?? steps[step]}</p>
       </div>
     </div>
   );
@@ -507,11 +560,13 @@ function ReportView({
   moves,
   shareUrl,
   onShare,
+  onReset,
 }: {
   report: GameReport;
   moves: MoveEvaluation[];
   shareUrl?: string | null;
   onShare?: () => void;
+  onReset?: () => void;
 }) {
   const isFallbackReport = report.metadata.source === "material";
 
@@ -533,11 +588,18 @@ function ReportView({
       <section className="report-section">
         <div className="report-section-heading">
           <h2>Summary</h2>
-          {onShare ? (
-            <button className="secondary" onClick={onShare}>
-              Share Report
-            </button>
-          ) : null}
+          <div style={{ display: "flex", gap: "1rem" }}>
+            {onReset ? (
+              <button className="primary" onClick={onReset}>
+                Analyze Another Game
+              </button>
+            ) : null}
+            {onShare ? (
+              <button className="secondary" onClick={onShare}>
+                Share Report
+              </button>
+            ) : null}
+          </div>
         </div>
         <p>{report.summary}</p>
         {shareUrl ? (
