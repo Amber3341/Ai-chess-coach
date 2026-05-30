@@ -438,6 +438,11 @@ function App() {
             </div>
           ) : state === "analyzing" ? (
             <AnalysisLoading message={analyzeProgress} />
+          ) : state === "failed" ? (
+            <div className="empty-state">
+              <h2>Action Failed</h2>
+              <p>{error || "An error occurred during upload or analysis."}</p>
+            </div>
           ) : report ? (
             <ReportView
               report={report}

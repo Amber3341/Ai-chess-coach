@@ -53,7 +53,7 @@ export function LoginPage() {
     setLoading(true);
     try {
       const { access_token } = await login({ email, password });
-      authLogin(access_token);
+      await authLogin(access_token);
       navigate(getRedirectPath(location.state), { replace: true });
     } catch (err: any) {
       setError(err.message || "Failed to log in");
@@ -141,7 +141,7 @@ export function RegisterPage() {
         password, 
         display_name: displayName || undefined 
       });
-      authLogin(access_token);
+      await authLogin(access_token);
       navigate(getRedirectPath(location.state), { replace: true });
     } catch (err: any) {
       setError(err.message || "Failed to register");
